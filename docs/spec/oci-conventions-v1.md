@@ -14,6 +14,8 @@ A v1 Cumasach skill artifact consists of:
 - one config blob using the Cumasach manifest JSON
 - one `tar.gz` layer containing the skill payload
 
+The OCI image manifest for a v1 artifact MUST contain exactly one config descriptor and exactly one layer descriptor. Additional manifest layers are invalid in v1.
+
 Version 1 does not require additional OCI layers. Signatures, provenance, and attestations SHOULD be attached via OCI referrers when the registry supports them.
 
 ## 3. Media Types
@@ -56,13 +58,25 @@ Publishers SHOULD push semver tags such as `1.2.0`.
 
 Consumers SHOULD pin digests in lockfiles and install state.
 
-Digests are the immutable identity of a resolved package version.
+For v1 lockfiles, install state, and rollback records, `digest` means the OCI manifest digest of the resolved artifact.
+
+An artifact reference in v1 MUST use the form:
+
+```text
+oci://<registry>/<repository>@sha256:<manifest-digest>
+```
+
+Tag-based references such as `oci://<registry>/<repository>:1.2.0` MAY be used for user input or publication workflows, but MUST NOT appear in lockfiles or install-state snapshots.
+
+The OCI manifest digest is the immutable identity of a resolved package version for dependency locking and rollback.
 
 ## 5. ORAS Interoperability
 
 ### 5.1 Requirement
 
 A valid Cumasach artifact MUST be pushable and pullable with stock `oras`.
+
+The command examples in this document are informative and target ORAS CLI 1.2 semantics or later. Conformance is defined by the produced and retrieved OCI artifact shape, not by exact CLI flags.
 
 ### 5.2 Reference push shape
 
@@ -108,6 +122,8 @@ When an artifact is fetched from OCI, the canonical trust source is:
 - the config blob digest
 - any registry-backed signatures or attestations
 
+The content-layer digest is useful for payload integrity checks, but it is not the package identity recorded in lockfiles or install state.
+
 ### 6.2 Referrers
 
 If the registry supports OCI referrers, implementations SHOULD publish signatures and provenance as referrers to the resolved artifact digest.
@@ -131,7 +147,7 @@ Consumers:
 
 - MUST validate the config media type
 - MUST validate the content-layer media type
-- MUST fail if multiple content layers are present in a v1 artifact
+- MUST fail if the manifest contains anything other than exactly one config descriptor and exactly one content layer descriptor
 - MUST fetch or otherwise read the canonical config blob before comparing it with `.skill/manifest.json`
 - SHOULD prefer digest-based installation and locking
 
