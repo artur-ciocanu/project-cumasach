@@ -4,7 +4,7 @@
 
 This document defines the OCI transport and registry conventions for Cumasach v1.
 
-It complements, but does not replace, the normative rules in [packaging-v1.md](/Users/ciocanu/personal/code/project-cumasach/.worktrees/spec-hardening/docs/spec/packaging-v1.md).
+It complements, but does not replace, the normative rules in [packaging-v1.md](./packaging-v1.md).
 
 ## 2. OCI Object Model
 
@@ -78,13 +78,25 @@ The exact command-line flags MAY differ by ORAS version, but the artifact produc
 
 ### 5.3 Reference pull shape
 
-Consumers SHOULD be able to retrieve the payload with:
+Consumers SHOULD be able to retrieve the payload layer with:
 
 ```text
 oras pull <registry-repo>@sha256:<digest>
 ```
 
-The output tarball and config blob MUST correspond to the published artifact.
+To retrieve the canonical config blob used for manifest comparison, consumers SHOULD use either:
+
+```text
+oras pull --config <output-file> <registry-repo>@sha256:<digest>
+```
+
+or:
+
+```text
+oras manifest fetch-config <registry-repo>@sha256:<digest>
+```
+
+The pulled payload layer and fetched config blob MUST correspond to the published artifact.
 
 ## 6. Provenance and Signatures
 
@@ -120,6 +132,7 @@ Consumers:
 - MUST validate the config media type
 - MUST validate the content-layer media type
 - MUST fail if multiple content layers are present in a v1 artifact
+- MUST fetch or otherwise read the canonical config blob before comparing it with `.skill/manifest.json`
 - SHOULD prefer digest-based installation and locking
 
 ## 9. Future Extension Points

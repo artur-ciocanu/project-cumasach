@@ -7,7 +7,8 @@
   "required": [
     "schemaVersion",
     "root",
-    "packages"
+    "packages",
+    "edges"
   ],
   "properties": {
     "schemaVersion": {
@@ -46,8 +47,7 @@
           "name",
           "version",
           "digest",
-          "reference",
-          "relationship"
+          "reference"
         ],
         "properties": {
           "name": {
@@ -65,22 +65,36 @@
           "reference": {
             "type": "string",
             "minLength": 1
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to",
+          "relationship"
+        ],
+        "properties": {
+          "from": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$"
+          },
+          "to": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$"
           },
           "relationship": {
             "type": "string",
             "enum": [
-              "root",
               "required",
               "recommended",
               "extends"
             ]
-          },
-          "dependencies": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "pattern": "^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$"
-            }
           }
         }
       }
