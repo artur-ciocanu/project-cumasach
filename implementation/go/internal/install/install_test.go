@@ -1,0 +1,352 @@
+package install
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	archivepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/archive"
+	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
+	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/packagex"
+)
+
+func TestInstallSingleRootWritesActiveDirectoryAndState(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	ref := pushSkill(t, registry, fixtureSkillDir(t), "registry.example.com/agentskills/list-directory")
+
+	targetDir := t.TempDir()
+	now := time.Date(2026, 3, 26, 12, 0, 0, 0, time.UTC)
+
+	state, err := Install(context.Background(), Options{
+		Registry:  registry,
+		Reference: ref,
+		TargetDir: targetDir,
+		Now: func() time.Time {
+			return now
+		},
+	})
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(targetDir, "list-directory", "SKILL.md")); err != nil {
+		t.Fatalf("Stat(active SKILL.md) error = %v", err)
+	}
+
+	loaded, err := LoadState(targetDir)
+	if err != nil {
+		t.Fatalf("LoadState() error = %v", err)
+	}
+
+	if len(loaded.Active) != 1 || loaded.Active[0].Name != "list-directory" {
+		t.Fatalf("loaded active = %#v, want one list-directory entry", loaded.Active)
+	}
+	if len(loaded.History) != 1 || loaded.History[0].Action != "install" {
+		t.Fatalf("loaded history = %#v, want single install entry", loaded.History)
+	}
+	if got := loaded.History[0].Timestamp; got != now.Format(time.RFC3339) {
+		t.Fatalf("history timestamp = %q, want %q", got, now.Format(time.RFC3339))
+	}
+	if !equalResolvedSets(loaded.Active, loaded.History[0].Resolved) {
+		t.Fatalf("history snapshot = %#v, want active snapshot %#v", loaded.History[0].Resolved, loaded.Active)
+	}
+	if state.Active[0].Reference != ref {
+		t.Fatalf("state active reference = %q, want %q", state.Active[0].Reference, ref)
+	}
+}
+
+func TestInstallRejectsConfigManifestMismatch(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	repository := "registry.example.com/agentskills/list-directory"
+	archiveBytes := buildPackageBytes(t, fixtureSkillDir(t))
+	badConfig := []byte(`{"schemaVersion":"v1","packageType":"skill","name":"list-directory","version":"9.9.9","skill":{"entrypoint":"SKILL.md"}}`)
+
+	ref, err := oci.Push(context.Background(), registry, repository, badConfig, archiveBytes, oci.PushOptions{Tag: "1.2.3"})
+	if err != nil {
+		t.Fatalf("Push() error = %v", err)
+	}
+
+	_, err = Install(context.Background(), Options{
+		Registry:  registry,
+		Reference: ref.Canonical(),
+		TargetDir: t.TempDir(),
+	})
+	if err == nil {
+		t.Fatal("Install() error = nil, want mismatch failure")
+	}
+	if !strings.Contains(err.Error(), "does not match mirrored manifest") {
+		t.Fatalf("Install() error = %q, want mismatch context", err)
+	}
+}
+
+func TestInstallUpgradeReplacesActiveDirectoryAndAppendsHistory(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	targetDir := t.TempDir()
+
+	firstRef := pushSkill(t, registry, fixtureSkillDir(t), "registry.example.com/agentskills/list-directory")
+	firstNow := time.Date(2026, 3, 26, 12, 0, 0, 0, time.UTC)
+	if _, err := Install(context.Background(), Options{
+		Registry:  registry,
+		Reference: firstRef,
+		TargetDir: targetDir,
+		Now: func() time.Time {
+			return firstNow
+		},
+	}); err != nil {
+		t.Fatalf("first Install() error = %v", err)
+	}
+
+	secondDir := mutatedSkillDir(t, "2.0.0", "# list-directory\n\nversion two\n")
+	secondRef := pushSkill(t, registry, secondDir, "registry.example.com/agentskills/list-directory")
+	secondNow := time.Date(2026, 3, 26, 13, 0, 0, 0, time.UTC)
+	state, err := Install(context.Background(), Options{
+		Registry:  registry,
+		Reference: secondRef,
+		TargetDir: targetDir,
+		Now: func() time.Time {
+			return secondNow
+		},
+	})
+	if err != nil {
+		t.Fatalf("second Install() error = %v", err)
+	}
+
+	skillBytes, err := os.ReadFile(filepath.Join(targetDir, "list-directory", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(active SKILL.md) error = %v", err)
+	}
+	if !strings.Contains(string(skillBytes), "version two") {
+		t.Fatalf("SKILL.md = %q, want upgraded contents", string(skillBytes))
+	}
+
+	if len(state.History) != 2 {
+		t.Fatalf("history length = %d, want 2", len(state.History))
+	}
+	if state.History[0].Action != "install" || state.History[1].Action != "upgrade" {
+		t.Fatalf("history actions = %#v, want install then upgrade", state.History)
+	}
+	if !equalResolvedSets(state.Active, state.History[len(state.History)-1].Resolved) {
+		t.Fatalf("newest history = %#v, want active %#v", state.History[len(state.History)-1].Resolved, state.Active)
+	}
+	if state.Active[0].Version != "2.0.0" {
+		t.Fatalf("active version = %q, want %q", state.Active[0].Version, "2.0.0")
+	}
+}
+
+func TestInstallRejectsMalformedExistingInstallState(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	targetDir := t.TempDir()
+	ref := pushSkill(t, registry, fixtureSkillDir(t), "registry.example.com/agentskills/list-directory")
+
+	badState := State{
+		SchemaVersion: SchemaVersion,
+		Target: Target{Path: targetDir},
+		Active: []ResolvedSkill{
+			{
+				Name:      "list-directory",
+				Version:   "1.2.3",
+				Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Reference: "oci://registry.example.com/agentskills/list-directory@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			},
+		},
+		History: []HistoryEntry{
+			{
+				Timestamp: "2026-03-26T11:00:00Z",
+				Action:    "install",
+				Resolved: []ResolvedSkill{
+					{
+						Name:      "list-directory",
+						Version:   "1.2.2",
+						Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+						Reference: "oci://registry.example.com/agentskills/list-directory@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+					},
+				},
+			},
+		},
+	}
+	if err := WriteState(targetDir, badState); err == nil {
+		t.Fatal("WriteState() error = nil, want semantic validation failure")
+	}
+
+	statePath := StatePath(targetDir)
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+		t.Fatalf("MkdirAll(state dir) error = %v", err)
+	}
+	raw := `{
+  "schemaVersion": "v1",
+  "target": {"path": "` + targetDir + `"},
+  "active": [
+    {
+      "name": "list-directory",
+      "version": "1.2.3",
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "reference": "oci://registry.example.com/agentskills/list-directory@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "history": [
+    {
+      "timestamp": "2026-03-26T11:00:00Z",
+      "action": "install",
+      "resolved": [
+        {
+          "name": "list-directory",
+          "version": "1.2.2",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "reference": "oci://registry.example.com/agentskills/list-directory@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ]
+    }
+  ]
+}`
+	if err := os.WriteFile(statePath, []byte(raw), 0o644); err != nil {
+		t.Fatalf("WriteFile(bad state) error = %v", err)
+	}
+
+	_, err := Install(context.Background(), Options{
+		Registry:  registry,
+		Reference: ref,
+		TargetDir: targetDir,
+	})
+	if err == nil {
+		t.Fatal("Install() error = nil, want malformed existing state failure")
+	}
+	if !strings.Contains(err.Error(), "active does not match newest history snapshot") {
+		t.Fatalf("Install() error = %q, want semantic validation context", err)
+	}
+}
+
+func TestInstallRollsBackActivationWhenStateWriteFails(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	targetDir := t.TempDir()
+
+	firstRef := pushSkill(t, registry, fixtureSkillDir(t), "registry.example.com/agentskills/list-directory")
+	if _, err := Install(context.Background(), Options{
+		Registry:  registry,
+		Reference: firstRef,
+		TargetDir: targetDir,
+	}); err != nil {
+		t.Fatalf("first Install() error = %v", err)
+	}
+
+	secondDir := mutatedSkillDir(t, "2.0.0", "# list-directory\n\nversion two\n")
+	secondRef := pushSkill(t, registry, secondDir, "registry.example.com/agentskills/list-directory")
+
+	_, err := Install(context.Background(), Options{
+		Registry:    registry,
+		Reference:   secondRef,
+		TargetDir:   targetDir,
+		StateWriter: func(string, State) error { return errors.New("boom") },
+	})
+	if err == nil {
+		t.Fatal("Install() error = nil, want state write failure")
+	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("Install() error = %q, want state write failure context", err)
+	}
+
+	skillBytes, err := os.ReadFile(filepath.Join(targetDir, "list-directory", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(active SKILL.md) error = %v", err)
+	}
+	if strings.Contains(string(skillBytes), "version two") {
+		t.Fatalf("SKILL.md = %q, want rollback to preserve previous contents", string(skillBytes))
+	}
+}
+
+func pushSkill(t *testing.T, registry *oci.MemoryRegistry, skillDir, repository string) string {
+	t.Helper()
+
+	archiveBytes := buildPackageBytes(t, skillDir)
+	mirroredManifestBytes, _, err := archivepkg.ReadMirroredManifestTGZ(bytes.NewReader(archiveBytes))
+	if err != nil {
+		t.Fatalf("ReadMirroredManifestTGZ() error = %v", err)
+	}
+
+	ref, err := oci.Push(context.Background(), registry, repository, mirroredManifestBytes, archiveBytes, oci.PushOptions{})
+	if err != nil {
+		t.Fatalf("Push() error = %v", err)
+	}
+
+	return ref.Canonical()
+}
+
+func buildPackageBytes(t *testing.T, skillDir string) []byte {
+	t.Helper()
+
+	var archive bytes.Buffer
+	if err := packagex.BuildTGZ(&archive, skillDir, packagex.BuildOptions{
+		IncludeFilesSHA256: true,
+	}); err != nil {
+		t.Fatalf("BuildTGZ() error = %v", err)
+	}
+
+	return archive.Bytes()
+}
+
+func fixtureSkillDir(t *testing.T) string {
+	t.Helper()
+
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) = !ok")
+	}
+
+	return filepath.Join(filepath.Dir(filename), "../../../testdata/skills/list-directory")
+}
+
+func mutatedSkillDir(t *testing.T, version, skillBody string) string {
+	t.Helper()
+
+	parent := t.TempDir()
+	root := filepath.Join(parent, "list-directory")
+	if err := copyDir(fixtureSkillDir(t), root); err != nil {
+		t.Fatalf("copyDir() error = %v", err)
+	}
+
+	manifestPath := filepath.Join(root, ".skill", "manifest.json")
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("ReadFile(manifest) error = %v", err)
+	}
+	manifestBytes = bytes.Replace(manifestBytes, []byte(`"version": "1.2.3"`), []byte(`"version": "`+version+`"`), 1)
+	if err := os.WriteFile(manifestPath, manifestBytes, 0o644); err != nil {
+		t.Fatalf("WriteFile(manifest) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "SKILL.md"), []byte(skillBody), 0o644); err != nil {
+		t.Fatalf("WriteFile(SKILL.md) error = %v", err)
+	}
+
+	return root
+}
+
+func copyDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		targetPath := filepath.Join(dst, rel)
+
+		if info.IsDir() {
+			return os.MkdirAll(targetPath, info.Mode().Perm())
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(targetPath, data, info.Mode().Perm())
+	})
+}
+
+func equalResolvedSets(left, right []ResolvedSkill) bool { return equalResolvedSlices(left, right) }
