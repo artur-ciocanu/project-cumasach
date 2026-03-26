@@ -224,11 +224,19 @@ Dependency `version` values MUST use the Helm-compatible SemVer constraint langu
 Allowed forms include:
 
 - exact versions such as `1.2.3`
+- comparator expressions using `=`, `!=`, `>`, `<`, `>=`, and `<=`
+- hyphen ranges such as `1.1 - 2.3.4`
+- wildcard ranges using `x`, `X`, or `*`
 - caret ranges such as `^2.3.0`
 - tilde ranges such as `~1.4.2`
 - comparator sets such as `>=1.0.0 <2.0.0`
+- logical OR expressions using `||`
 
-Consumers MUST interpret prerelease matching and comparator semantics consistently with that grammar.
+Whitespace-separated comparator sets MUST be interpreted as logical AND.
+
+Consumers MUST interpret prerelease matching and comparator semantics consistently with that grammar. In particular, prerelease versions MUST NOT satisfy a constraint unless the constraint itself admits a prerelease according to the Helm-compatible semantics, for example `~1.2.3-0`.
+
+Consumers MUST reject unsupported operators or shorthand forms rather than attempting best-effort parsing.
 
 JSON Schema validation alone does not fully validate this constraint grammar in v1. Consumers MUST perform semantic validation of dependency and compatibility constraint strings in addition to schema validation.
 
@@ -296,7 +304,9 @@ Dependency resolution MUST be performed against published package metadata, not 
 
 If no lockfile is supplied, a consumer MUST choose the highest available version that satisfies all applicable constraints.
 
-For equal stable versions available under multiple references, policy MAY choose among allowed sources, but the selected package digest MUST be recorded.
+Stable versions MUST sort ahead of prerelease versions with the same base version unless the constraint admits only prerelease matches.
+
+For equal versions available under multiple references, policy MAY choose among allowed sources, but the selected package digest MUST be recorded.
 
 ### 9.3 Conflict handling
 
