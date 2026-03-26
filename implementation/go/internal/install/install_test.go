@@ -259,6 +259,59 @@ func TestInstallRollsBackActivationWhenStateWriteFails(t *testing.T) {
 	}
 }
 
+func TestInstallFailsWhenBackupCleanupFails(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	targetDir := t.TempDir()
+
+	firstRef := pushSkill(t, registry, fixtureSkillDir(t), "registry.example.com/agentskills/list-directory")
+	if _, err := Install(context.Background(), Options{
+		Registry:  registry,
+		Reference: firstRef,
+		TargetDir: targetDir,
+	}); err != nil {
+		t.Fatalf("first Install() error = %v", err)
+	}
+
+	secondDir := mutatedSkillDir(t, "2.0.0", "# list-directory\n\nversion two\n")
+	secondRef := pushSkill(t, registry, secondDir, "registry.example.com/agentskills/list-directory")
+
+	previousCommit := commitActivation
+	commitActivation = func(*Activation) error {
+		return errors.New("cleanup failed")
+	}
+	defer func() {
+		commitActivation = previousCommit
+	}()
+
+	_, err := Install(context.Background(), Options{
+		Registry:  registry,
+		Reference: secondRef,
+		TargetDir: targetDir,
+	})
+	if err == nil {
+		t.Fatal("Install() error = nil, want cleanup failure")
+	}
+	if !strings.Contains(err.Error(), "install succeeded but cleanup failed") {
+		t.Fatalf("Install() error = %q, want cleanup failure context", err)
+	}
+
+	skillBytes, readErr := os.ReadFile(filepath.Join(targetDir, "list-directory", "SKILL.md"))
+	if readErr != nil {
+		t.Fatalf("ReadFile(active SKILL.md) error = %v", readErr)
+	}
+	if !strings.Contains(string(skillBytes), "version two") {
+		t.Fatalf("SKILL.md = %q, want upgraded contents despite cleanup failure", string(skillBytes))
+	}
+
+	loaded, loadErr := LoadState(targetDir)
+	if loadErr != nil {
+		t.Fatalf("LoadState() error = %v", loadErr)
+	}
+	if len(loaded.Active) != 1 || loaded.Active[0].Version != "2.0.0" {
+		t.Fatalf("loaded active = %#v, want upgraded active state", loaded.Active)
+	}
+}
+
 func pushSkill(t *testing.T, registry *oci.MemoryRegistry, skillDir, repository string) string {
 	t.Helper()
 

@@ -20,6 +20,10 @@ type Options struct {
 	StateWriter func(string, State) error
 }
 
+var commitActivation = func(activation *Activation) error {
+	return activation.Commit()
+}
+
 func Install(ctx context.Context, options Options) (State, error) {
 	if options.Registry == nil {
 		return State{}, fmt.Errorf("registry is required")
@@ -91,7 +95,9 @@ func Install(ctx context.Context, options Options) (State, error) {
 		}
 		return State{}, err
 	}
-	_ = activation.Commit()
+	if err := commitActivation(activation); err != nil {
+		return State{}, fmt.Errorf("install succeeded but cleanup failed: %w", err)
+	}
 
 	return state, nil
 }
