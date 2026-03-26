@@ -37,6 +37,9 @@ func TestBuildTGZWritesArchiveWithGeneratedFilesSHA256(t *testing.T) {
 
 func TestBuildTGZOmitsFilesSHA256WhenDisabled(t *testing.T) {
 	sourceDir := copySkillFixture(t, "list-directory")
+	if err := os.WriteFile(filepath.Join(sourceDir, ".skill", "files.sha256"), []byte("stale\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(files.sha256) error = %v", err)
+	}
 
 	var archive bytes.Buffer
 	if err := BuildTGZ(&archive, sourceDir, BuildOptions{}); err != nil {

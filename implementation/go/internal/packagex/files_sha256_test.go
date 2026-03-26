@@ -79,6 +79,17 @@ func TestGenerateFilesSHA256RejectsAmbiguousPaths(t *testing.T) {
 	}
 }
 
+func TestValidateChecksumPathRejectsBackslashes(t *testing.T) {
+	err := validateChecksumPath("references\\usage.md")
+	if err == nil {
+		t.Fatal("validateChecksumPath() error = nil, want backslash rejection")
+	}
+
+	if !strings.Contains(err.Error(), "backslash") {
+		t.Fatalf("validateChecksumPath() error = %q, want backslash context", err)
+	}
+}
+
 func hashLine(t *testing.T, body []byte, relPath string) string {
 	t.Helper()
 

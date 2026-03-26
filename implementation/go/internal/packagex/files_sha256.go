@@ -96,6 +96,9 @@ func validateChecksumPath(relPath string) error {
 	if strings.HasPrefix(relPath, "/") {
 		return fmt.Errorf("invalid checksum path %q: absolute paths are not allowed", relPath)
 	}
+	if strings.Contains(relPath, "\\") {
+		return fmt.Errorf("invalid checksum path %q: backslash separators are not allowed", relPath)
+	}
 
 	for _, component := range strings.Split(relPath, "/") {
 		if component == "" || component == "." {

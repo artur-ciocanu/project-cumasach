@@ -21,15 +21,15 @@ func BuildTGZ(w io.Writer, sourceDir string, options BuildOptions) error {
 		return err
 	}
 
-	if !options.IncludeFilesSHA256 {
-		return archive.WriteTGZ(w, sourceDir, loaded)
-	}
-
 	stagingDir, err := stageSkillDir(sourceDir)
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(filepath.Dir(stagingDir))
+
+	if !options.IncludeFilesSHA256 {
+		return archive.WriteTGZ(w, stagingDir, loaded)
+	}
 
 	checksumBytes, err := GenerateFilesSHA256(stagingDir)
 	if err != nil {
@@ -111,6 +111,10 @@ func copyTree(sourceDir, destDir string) error {
 		}
 		if !entry.Type().IsRegular() {
 			return fmt.Errorf("unsupported filesystem entry %q", currentPath)
+		}
+
+		if relPath == filepath.Join(".skill", "files.sha256") {
+			return nil
 		}
 
 		data, err := os.ReadFile(currentPath)
