@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "v1",
+  "packageType": "skill",
+  "name": "list-directory",
+  "version": "1.2.3",
+  "description": "Lists the contents of a directory.",
+  "skill": {
+    "entrypoint": "SKILL.md"
+  }
+}

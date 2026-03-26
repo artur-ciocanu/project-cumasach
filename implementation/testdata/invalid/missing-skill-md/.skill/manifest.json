@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "v1",
+  "packageType": "skill",
+  "name": "missing-skill-md",
+  "version": "1.2.3",
+  "skill": {
+    "entrypoint": "SKILL.md"
+  }
+}

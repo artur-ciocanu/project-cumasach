@@ -17,7 +17,11 @@ The packaging standard uses a neutral `agentskills` namespace for OCI media type
 
 ## Status
 
-This repository currently contains the v1 specification draft, JSON Schemas, and example artifacts.
+This repository now contains:
+
+- the v1 specification draft
+- JSON Schemas and examples
+- a Go reference CLI vertical slice for `package`, `push`, and exact-artifact `install`
 
 ## Repository Layout
 
@@ -28,8 +32,10 @@ This repository currently contains the v1 specification draft, JSON Schemas, and
 - `schemas/skill-manifest-v1.schema.json`: JSON Schema for `.skill/manifest.json`
 - `schemas/skill-lock-v1.schema.json`: JSON Schema for lockfiles
 - `schemas/install-state-v1.schema.json`: JSON Schema for local install state
+- `examples/list-directory`: public demo skill used in the CLI walkthrough
 - `examples/python-development`: example skill package layout
 - `examples/oras`: example ORAS commands for publishing and pulling skill artifacts
+- `implementation/go`: Go reference implementation of the current CLI slice
 
 ## Core Model
 
@@ -54,6 +60,88 @@ The format is intentionally OCI-native. A valid Cumasach artifact must be pushab
 - `lock`
 - `rollback`
 - `verify`
+
+## Reference CLI
+
+The current Go reference implementation lives in `implementation/go`.
+
+The implemented vertical slice is:
+
+- `cumasach package <skill-dir>`
+- `cumasach push <package.tgz> <oci-repo> [--tag <tag>]`
+- `cumasach install <artifact-ref> --target <skills-dir>`
+
+Current limitations:
+
+- `install` supports exact artifact references only
+- package-name resolution is not implemented yet
+- lockfiles, dependency resolution, rollback, and verify are specified but not implemented yet
+
+## Quick Start
+
+Install the repo-managed toolchain:
+
+```bash
+mise install
+```
+
+Run the CLI from the Go module:
+
+```bash
+cd implementation/go
+mise exec -- go run ./cmd/cumasach --help
+```
+
+### Demo Skill
+
+The public demo skill is in `examples/list-directory`.
+
+Package it:
+
+```bash
+cd implementation/go
+mise exec -- go run ./cmd/cumasach package ../../examples/list-directory --files-sha256
+```
+
+That writes:
+
+```text
+implementation/go/dist/list-directory-1.2.3.tgz
+```
+
+Push it to an OCI registry:
+
+```bash
+cd implementation/go
+mise exec -- go run ./cmd/cumasach push ./dist/list-directory-1.2.3.tgz registry.example.com/agentskills/list-directory
+```
+
+The command prints a canonical digest-pinned artifact reference like:
+
+```text
+oci://registry.example.com/agentskills/list-directory@sha256:...
+```
+
+Install that exact artifact into a flat runtime-visible skills directory:
+
+```bash
+cd implementation/go
+mise exec -- go run ./cmd/cumasach install oci://registry.example.com/agentskills/list-directory@sha256:... --target /tmp/cumasach-skills
+```
+
+On success the target contains:
+
+```text
+/tmp/cumasach-skills/
+  list-directory/
+  .cumasach/install-state.json
+```
+
+The runtime-visible skill entry remains flat:
+
+- `/tmp/cumasach-skills/list-directory`
+
+The hidden `.cumasach/` directory is CLI metadata, not runtime-facing skill content.
 
 ## Non-Goals
 
