@@ -120,8 +120,8 @@ A Cumasach artifact MUST use the standard OCI image manifest.
 
 Version 1 defines these media types:
 
-- Config blob: `application/vnd.cumasach.config.v1+json`
-- Skill content layer: `application/vnd.cumasach.skill.content.v1.tar+gzip`
+- Config blob: `application/vnd.agentskills.config.v1+json`
+- Skill content layer: `application/vnd.agentskills.skill.content.v1.tar+gzip`
 
 Future versions MAY define additional layer or attestation media types.
 

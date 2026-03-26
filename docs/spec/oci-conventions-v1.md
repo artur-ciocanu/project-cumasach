@@ -23,8 +23,8 @@ Version 1 does not require additional OCI layers. Signatures, provenance, and at
 Version 1 defines these media types:
 
 - Manifest: `application/vnd.oci.image.manifest.v1+json`
-- Config: `application/vnd.cumasach.config.v1+json`
-- Content layer: `application/vnd.cumasach.skill.content.v1.tar+gzip`
+- Config: `application/vnd.agentskills.config.v1+json`
+- Content layer: `application/vnd.agentskills.skill.content.v1.tar+gzip`
 
 ### 3.2 Rationale
 
@@ -70,8 +70,8 @@ The reference shape is:
 
 ```text
 oras push <registry-repo>:<tag> \
-  --config manifest.json:application/vnd.cumasach.config.v1+json \
-  <skill-tarball>:application/vnd.cumasach.skill.content.v1.tar+gzip
+  --config manifest.json:application/vnd.agentskills.config.v1+json \
+  <skill-tarball>:application/vnd.agentskills.skill.content.v1.tar+gzip
 ```
 
 The exact command-line flags MAY differ by ORAS version, but the artifact produced MUST preserve the media types and blob contents defined by this specification.
@@ -130,4 +130,3 @@ Later versions MAY define:
 - SBOM attachment conventions
 - bundle or collection artifact types
 - lockfile artifact publication conventions
-

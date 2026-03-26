@@ -10,6 +10,5 @@ TAG="1.2.0"
 tar -czf "$TARBALL" -C examples skill-python-development
 
 oras push "$REPO:$TAG" \
-  --config "$SKILL_DIR/.skill/manifest.json:application/vnd.cumasach.config.v1+json" \
-  "$TARBALL:application/vnd.cumasach.skill.content.v1.tar+gzip"
-
+  --config "$SKILL_DIR/.skill/manifest.json:application/vnd.agentskills.config.v1+json" \
+  "$TARBALL:application/vnd.agentskills.skill.content.v1.tar+gzip"

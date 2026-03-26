@@ -13,6 +13,8 @@ The format is designed to:
 - Materialize exactly one active version of each skill into a flat runtime skills directory
 - Work with stock OCI tooling such as `oras`
 
+The packaging standard uses a neutral `agentskills` namespace for OCI media types and schema identifiers so it can be adopted beyond a single project or CLI.
+
 ## Status
 
 This repository currently contains the v1 specification draft, JSON Schemas, and example artifacts.
