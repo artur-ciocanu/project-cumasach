@@ -4,6 +4,8 @@
 
 This document defines version 1 of the Cumasach packaging format for Agent Skills.
 
+OCI transport conventions and conformance expectations are further defined in [oci-conventions-v1.md](/Users/ciocanu/personal/code/project-cumasach/.worktrees/spec-hardening/docs/spec/oci-conventions-v1.md) and [conformance-v1.md](/Users/ciocanu/personal/code/project-cumasach/.worktrees/spec-hardening/docs/spec/conformance-v1.md).
+
 The specification covers:
 
 - skill package structure
@@ -395,4 +397,3 @@ These are explicitly out of scope for v1 but likely candidates for later version
 - profile- or environment-scoped activation sets
 - package collections or bundles
 - optional feature flags for dependencies
-

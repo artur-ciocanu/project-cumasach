@@ -20,10 +20,13 @@ This repository currently contains the v1 specification draft, JSON Schemas, and
 ## Repository Layout
 
 - [docs/spec/packaging-v1.md](/Users/ciocanu/personal/code/project-cumasach/docs/spec/packaging-v1.md): normative package, registry, dependency, lockfile, and install-state specification
+- [docs/spec/oci-conventions-v1.md](/Users/ciocanu/personal/code/project-cumasach/.worktrees/spec-hardening/docs/spec/oci-conventions-v1.md): OCI media types, registry layout, and ORAS transport conventions
+- [docs/spec/conformance-v1.md](/Users/ciocanu/personal/code/project-cumasach/.worktrees/spec-hardening/docs/spec/conformance-v1.md): conformance requirements and test matrix
 - [schemas/skill-manifest-v1.schema.json](/Users/ciocanu/personal/code/project-cumasach/schemas/skill-manifest-v1.schema.json): JSON Schema for `.skill/manifest.json`
 - [schemas/skill-lock-v1.schema.json](/Users/ciocanu/personal/code/project-cumasach/schemas/skill-lock-v1.schema.json): JSON Schema for lockfiles
 - [schemas/install-state-v1.schema.json](/Users/ciocanu/personal/code/project-cumasach/schemas/install-state-v1.schema.json): JSON Schema for local install state
 - [examples/skill-python-development](/Users/ciocanu/personal/code/project-cumasach/examples/skill-python-development): example skill package layout
+- [examples/oras](/Users/ciocanu/personal/code/project-cumasach/.worktrees/spec-hardening/examples/oras): example ORAS commands for publishing and pulling skill artifacts
 
 ## Core Model
 
@@ -57,4 +60,3 @@ The format is intentionally OCI-native. A valid Cumasach artifact must be pushab
 - Defining container execution environments
 - Replacing the Agent Skills execution model
 - Requiring runtimes to understand OCI directly
-
