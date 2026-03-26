@@ -1,23 +1,15 @@
 package manifest
 
 import (
+	_ "embed"
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/xeipuuv/gojsonschema"
 )
 
-const schemaFileName = "skill-manifest-v1.schema.json"
-
-var (
-	schemaOnce  sync.Once
-	schemaBytes []byte
-	schemaErr   error
-)
+//go:embed skill-manifest-v1.schema.json
+var schemaBytes []byte
 
 func validate(data []byte) error {
 	schema, err := loadSchemaBytes()
@@ -46,27 +38,9 @@ func validate(data []byte) error {
 }
 
 func loadSchemaBytes() ([]byte, error) {
-	schemaOnce.Do(func() {
-		schemaPath, err := schemaPath()
-		if err != nil {
-			schemaErr = err
-			return
-		}
-
-		schemaBytes, schemaErr = os.ReadFile(schemaPath)
-		if schemaErr != nil {
-			schemaErr = fmt.Errorf("read manifest schema %q: %w", schemaPath, schemaErr)
-		}
-	})
-
-	return schemaBytes, schemaErr
-}
-
-func schemaPath() (string, error) {
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", fmt.Errorf("resolve schema path: runtime.Caller(0) failed")
+	if len(schemaBytes) == 0 {
+		return nil, fmt.Errorf("embedded manifest schema is empty")
 	}
 
-	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../../../schemas", schemaFileName)), nil
+	return schemaBytes, nil
 }

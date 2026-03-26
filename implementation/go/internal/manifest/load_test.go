@@ -76,7 +76,46 @@ func TestLoadReaderRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
+func TestLoadReaderUsesEmbeddedSchemaAtRuntime(t *testing.T) {
+	schemaPath := packagePath(t, "../../../../schemas/skill-manifest-v1.schema.json")
+	renamedPath := schemaPath + ".bak"
+
+	if err := os.Rename(schemaPath, renamedPath); err != nil {
+		t.Fatalf("Rename() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Rename(renamedPath, schemaPath); err != nil {
+			t.Fatalf("restore schema file: %v", err)
+		}
+	})
+
+	manifestBytes, err := os.ReadFile(testdataPath(t, "../../../testdata/skills/list-directory/.skill/manifest.json"))
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	loaded, err := LoadReader(strings.NewReader(string(manifestBytes)))
+	if err != nil {
+		t.Fatalf("LoadReader() error = %v", err)
+	}
+
+	if loaded.Name != "list-directory" {
+		t.Fatalf("Name = %q, want %q", loaded.Name, "list-directory")
+	}
+}
+
 func testdataPath(t *testing.T, relative string) string {
+	t.Helper()
+
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) failed")
+	}
+
+	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), relative))
+}
+
+func packagePath(t *testing.T, relative string) string {
 	t.Helper()
 
 	_, currentFile, _, ok := runtime.Caller(0)
