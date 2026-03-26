@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cumasach.dev/schemas/skill-lock-v1.schema.json",
+  "$id": "urn:agentskills:schema:skill-lock:v1",
   "title": "Cumasach Skill Lock v1",
   "type": "object",
   "additionalProperties": false,

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cumasach.dev/schemas/install-state-v1.schema.json",
+  "$id": "urn:agentskills:schema:install-state:v1",
   "title": "Cumasach Install State v1",
   "type": "object",
   "additionalProperties": false,
