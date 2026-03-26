@@ -15,6 +15,7 @@ func newRootCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(newPackageCmd())
+	cmd.AddCommand(newPushCmd())
 
 	return cmd
 }
