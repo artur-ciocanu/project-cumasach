@@ -24,6 +24,7 @@ This repository currently contains the v1 specification draft, JSON Schemas, and
 - `docs/spec/packaging-v1.md`: normative package, registry, dependency, lockfile, and install-state specification
 - `docs/spec/oci-conventions-v1.md`: OCI media types, registry layout, and ORAS transport conventions
 - `docs/spec/conformance-v1.md`: conformance requirements and test matrix
+- `docs/spec/cli-v1.md`: normative v1 CLI command surface and flag semantics
 - `schemas/skill-manifest-v1.schema.json`: JSON Schema for `.skill/manifest.json`
 - `schemas/skill-lock-v1.schema.json`: JSON Schema for lockfiles
 - `schemas/install-state-v1.schema.json`: JSON Schema for local install state
@@ -49,12 +50,10 @@ The format is intentionally OCI-native. A valid Cumasach artifact must be pushab
 
 - `package`
 - `push`
-- `pull`
-- `resolve`
-- `verify`
 - `install`
-- `rollback`
 - `lock`
+- `rollback`
+- `verify`
 
 ## Non-Goals
 
