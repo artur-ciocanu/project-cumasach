@@ -20,7 +20,8 @@ The goal is to prove the end-to-end packaging model defined by the existing v1 s
 - keep the repository's normative spec separate from the reference implementation
 - use `mise` to manage the local toolchain
 - use `oras-go` for OCI transport
-- preserve compatibility with the existing packaging, OCI, and CLI specifications
+- preserve compatibility with the existing packaging and OCI specifications
+- implement a deliberate subset of the existing CLI v1 specification as the first reference slice
 - make the first implementation small enough to finish quickly without painting the project into a corner
 
 ## Non-Goals
@@ -108,18 +109,24 @@ Deferred:
 
 Responsibilities:
 
-- accept a single root OCI artifact reference
+- accept a single root OCI artifact reference in either canonical `oci://...` form or plain OCI reference form
 - fetch that artifact from OCI
 - compare canonical OCI config metadata with the mirrored manifest in the archive
 - unpack the skill into a flat runtime-visible target directory
 - enforce one active version per skill name in the target directory
-- record minimal install state sufficient to support later rollback work
+- record install state that fully conforms to the existing v1 install-state schema, populated for the single-root install case
 
 Explicit limitation:
 
 - v1 of the implementation does not resolve dependencies
 - package-name installs via `--from` are deferred until dependency-aware resolution work begins
 - lockfile-driven installs are deferred
+
+Conformance note:
+
+- this slice is intentionally not a complete implementation of the full CLI v1 command surface
+- unsupported v1 commands and install modes must fail explicitly with “not implemented in this slice” style errors
+- packaging, OCI artifact shape, and install-state output must still conform fully to the existing v1 specs
 
 ## User Experience
 
@@ -256,7 +263,16 @@ The recorded state should include:
 - canonical OCI artifact reference pinned by manifest digest
 - install timestamp
 
-The shape should remain aligned with the existing install-state schema where practical, but the implementation can initially populate only the fields needed by single-root installs.
+The output must still fully conform to the existing install-state schema.
+
+For the single-root install slice, that means:
+
+- `schemaVersion` is always populated
+- `target` is always populated
+- `active` contains exactly one entry for the installed skill
+- `history` contains at least one append-only post-action snapshot matching the current `active` set
+
+The implementation may limit the semantic variety of recorded states to single-root installs, but it must not emit partial or schema-incomplete install-state documents.
 
 ## Error Handling
 
