@@ -217,7 +217,7 @@ Owns:
 
 - root artifact install flow
 - target directory activation
-- minimal install-state writing
+- schema-complete install-state writing for the single-root slice
 
 This package should not know how to resolve dependency graphs yet. It only handles a single already-selected artifact reference.
 
@@ -248,7 +248,7 @@ This package should not know how to resolve dependency graphs yet. It only handl
 4. `internal/install` verifies that both manifest representations match.
 5. `internal/archive` extracts the skill payload.
 6. `internal/install` replaces any currently active directory for that skill name in the target directory.
-7. `internal/install` records minimal install state.
+7. `internal/install` records schema-complete install state for the single-root install case.
 8. CLI reports the activated skill name and version.
 
 ## Install State
