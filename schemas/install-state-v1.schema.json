@@ -94,7 +94,8 @@
               "required": [
                 "name",
                 "version",
-                "digest"
+                "digest",
+                "source"
               ],
               "properties": {
                 "name": {
@@ -108,6 +109,10 @@
                 "digest": {
                   "type": "string",
                   "pattern": "^sha256:[a-f0-9]{64}$"
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1
                 }
               }
             }

@@ -42,9 +42,12 @@ Stock `oras` is the reference interoperability target for transport conformance.
 The implementation MUST pass:
 
 - valid single-skill tarball with exactly one top-level directory
+- top-level directory name equals manifest `name`
 - missing `SKILL.md` fails
 - missing `.skill/manifest.json` fails
 - more than one top-level directory fails
+- tar entries with absolute paths fail
+- packages containing symlinks, hardlinks, special files, or path traversal fail
 - malformed JSON manifest fails
 - schema-invalid manifest fails
 
@@ -65,6 +68,7 @@ The implementation MUST pass:
 
 - satisfiable `required` dependency graph resolves
 - unsatisfied `required` dependency graph fails
+- dependency ranges use the Helm-compatible constraint grammar defined by the packaging spec
 - `recommended` dependency can be omitted by policy
 - `extends` dependency never blocks install by itself
 - conflicting constraints on the same skill fail resolution
@@ -74,6 +78,7 @@ The implementation MUST pass:
 The implementation MUST pass:
 
 - one active version per skill name in the runtime-visible directory
+- active directory name equals the selected package `name`
 - installing a new version replaces the active version in that target
 - retained older versions in local cache do not appear in active view
 - flat-directory runtimes see normal skill directories only
@@ -83,6 +88,8 @@ The implementation MUST pass:
 The implementation MUST pass:
 
 - generated lockfile pins digests for all resolved packages
+- lockfile includes the selected root package in `packages`
+- lockfile preserves dependency edges and per-edge relationship types
 - install from lockfile reproduces the same active set
 - rollback restores the previous recorded active set
 
@@ -91,7 +98,8 @@ The implementation MUST pass:
 The implementation MUST pass:
 
 - artifact can be pushed with stock `oras`
-- artifact can be pulled with stock `oras`
+- payload layer can be pulled with stock `oras`
+- canonical config blob can be fetched with stock `oras`
 - pulled tarball digest matches the originally published content layer digest
 - pulled config blob matches the mirrored manifest
 
@@ -124,4 +132,3 @@ Implementers SHOULD automate:
 - ORAS push/pull smoke test against a disposable OCI registry
 - dependency-resolution golden tests
 - rollback state restoration tests
-

@@ -24,7 +24,7 @@
     },
     "version": {
       "type": "string",
-      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
     },
     "description": {
       "type": "string",
@@ -59,7 +59,8 @@
           },
           "version": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Helm-compatible SemVer constraint string. Full grammar validation is semantic and must be performed by consumers."
           },
           "relationship": {
             "type": "string",
@@ -109,7 +110,8 @@
       "properties": {
         "agentSkills": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Helm-compatible SemVer constraint string. Full grammar validation is semantic and must be performed by consumers."
         },
         "runtimes": {
           "type": "array",
@@ -127,7 +129,8 @@
               },
               "version": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Helm-compatible SemVer constraint string. Full grammar validation is semantic and must be performed by consumers."
               }
             }
           }

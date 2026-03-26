@@ -4,7 +4,7 @@
 
 This document defines version 1 of the Cumasach packaging format for Agent Skills.
 
-OCI transport conventions and conformance expectations are further defined in [oci-conventions-v1.md](/Users/ciocanu/personal/code/project-cumasach/.worktrees/spec-hardening/docs/spec/oci-conventions-v1.md) and [conformance-v1.md](/Users/ciocanu/personal/code/project-cumasach/.worktrees/spec-hardening/docs/spec/conformance-v1.md).
+OCI transport conventions and conformance expectations are further defined in [oci-conventions-v1.md](./oci-conventions-v1.md) and [conformance-v1.md](./conformance-v1.md).
 
 The specification covers:
 
@@ -58,13 +58,16 @@ Version 1 is designed to satisfy these goals:
 `Local store`
 : A local cache outside the runtime-visible skills directory that may retain multiple versions of the same skill.
 
+`Resolution graph`
+: The directed graph of selected packages and dependency edges produced during dependency solving.
+
 ## 5. Package Structure
 
 ### 5.1 Required layout
 
-A skill package MUST contain exactly one top-level skill directory.
+A skill package MUST contain exactly one top-level directory.
 
-The top-level directory name SHOULD match the `name` field in the manifest.
+The top-level directory name MUST exactly match the manifest `name` field.
 
 Example:
 
@@ -96,7 +99,19 @@ The package MAY contain:
 - `.skill/files.sha256`
 - other support files referenced by `SKILL.md`
 
-### 5.3 Reserved metadata directory
+### 5.3 Extraction safety
+
+When reading or extracting a package, consumers MUST reject tar entries that:
+
+- are absolute paths
+- contain `..` path traversal segments
+- are symbolic links
+- are hard links
+- are device files, fifos, or other special files
+
+Consumers MUST treat such packages as malformed.
+
+### 5.4 Reserved metadata directory
 
 The `.skill/` directory is reserved for packaging and distribution metadata.
 
@@ -129,7 +144,7 @@ Future versions MAY define additional layer or attestation media types.
 
 The OCI config blob is the canonical metadata source for a package.
 
-The config blob MUST conform to the schema defined in [schemas/skill-manifest-v1.schema.json](/Users/ciocanu/personal/code/project-cumasach/schemas/skill-manifest-v1.schema.json).
+The config blob MUST conform to the schema defined in [../../schemas/skill-manifest-v1.schema.json](../../schemas/skill-manifest-v1.schema.json).
 
 ### 6.4 Mirrored metadata location
 
@@ -170,7 +185,9 @@ The manifest object MUST contain:
 
 ### 7.4 Version
 
-`version` MUST be a valid semantic version string.
+`version` MUST be a valid Semantic Version 2.0.0 string.
+
+Build metadata MAY be present in the manifest version, but publishers SHOULD avoid build metadata when using the same value as an OCI tag because registry tooling commonly treats tags as exact strings.
 
 ### 7.5 Skill object
 
@@ -200,11 +217,36 @@ Valid `relationship` values:
 - `recommended`
 - `extends`
 
-Dependency semantics:
+#### 7.7.1 Constraint language
 
-- `required`: the consumer MUST include a compatible version unless policy explicitly allows otherwise
-- `recommended`: the consumer SHOULD include a compatible version unless policy disables recommended dependencies
-- `extends`: the consumer MAY surface this relationship for composition, but MUST NOT treat it as a hard install requirement
+Dependency `version` values MUST use the Helm-compatible SemVer constraint language used for chart dependencies.
+
+Allowed forms include:
+
+- exact versions such as `1.2.3`
+- comparator expressions using `=`, `!=`, `>`, `<`, `>=`, and `<=`
+- hyphen ranges such as `1.1 - 2.3.4`
+- wildcard ranges using `x`, `X`, or `*`
+- caret ranges such as `^2.3.0`
+- tilde ranges such as `~1.4.2`
+- comparator sets such as `>=1.0.0 <2.0.0`
+- logical OR expressions using `||`
+
+Whitespace-separated comparator sets MUST be interpreted as logical AND.
+
+Consumers MUST interpret prerelease matching and comparator semantics consistently with that grammar. In particular, prerelease versions MUST NOT satisfy a constraint unless the constraint itself admits a prerelease according to the Helm-compatible semantics, for example `~1.2.3-0`.
+
+Consumers MUST reject unsupported operators or shorthand forms rather than attempting best-effort parsing.
+
+JSON Schema validation alone does not fully validate this constraint grammar in v1. Consumers MUST perform semantic validation of dependency and compatibility constraint strings in addition to schema validation.
+
+#### 7.7.2 Dependency semantics
+
+- `required`: the consumer MUST include exactly one compatible version in the resolved graph. If no such version can be resolved, installation MUST fail.
+- `recommended`: the consumer SHOULD include a compatible version unless disabled by policy.
+- `extends`: the consumer MAY surface this relationship for composition, but MUST NOT treat it as a hard install requirement.
+
+Policy MUST NOT downgrade `required` into best-effort behavior.
 
 ### 7.8 Requirements
 
@@ -232,6 +274,8 @@ Each runtime compatibility object MUST contain:
 - `name`
 - `version`
 
+The `version` field in `compatibility` objects MUST use the same constraint language defined in section 7.7.1.
+
 ### 7.10 Source and publisher
 
 `source` and `publisher` are OPTIONAL metadata objects intended for provenance, policy, and discovery.
@@ -258,7 +302,11 @@ Dependency resolution MUST be performed against published package metadata, not 
 
 ### 9.2 Version selection
 
-If no lockfile is supplied, a consumer SHOULD choose the highest available version that satisfies all constraints, unless overridden by policy.
+If no lockfile is supplied, a consumer MUST choose the highest available version that satisfies all applicable constraints.
+
+Stable versions MUST sort ahead of prerelease versions with the same base version unless the constraint admits only prerelease matches.
+
+For equal versions available under multiple references, policy MAY choose among allowed sources, but the selected package digest MUST be recorded.
 
 ### 9.3 Conflict handling
 
@@ -274,25 +322,41 @@ Recommended dependencies SHOULD be installed by default only when policy permits
 
 `extends` dependencies are descriptive. They MUST NOT by themselves cause installation failure.
 
+### 9.6 Dependency cycles
+
+If the resolved graph contains a cycle of `required` dependencies, consumers MUST fail unless the cycle can be represented with one selected version per skill name and no unresolved constraints remain.
+
+Implementations SHOULD reject self-dependencies.
+
 ## 10. Lockfile Format
 
 A lockfile records a fully resolved dependency graph for a target active view.
 
-The lockfile MUST conform to [schemas/skill-lock-v1.schema.json](/Users/ciocanu/personal/code/project-cumasach/schemas/skill-lock-v1.schema.json).
+The lockfile MUST conform to [../../schemas/skill-lock-v1.schema.json](../../schemas/skill-lock-v1.schema.json).
 
 ### 10.1 Required fields
 
 - `schemaVersion`
 - `root`
 - `packages`
+- `edges`
 
 ### 10.2 Semantics
 
 - `root` identifies the requested package
 - `packages` lists every resolved skill, including transitive dependencies
-- each package entry MUST include name, version, digest, source reference, and relationship
+- the package selected by `root.name` and `root.version` MUST also appear in `packages`
+- each package entry MUST include name, version, digest, and source reference
+- `edges` records dependency edges from parent to child package names and preserves per-edge relationship semantics
 
-### 10.3 Reproducibility
+### 10.3 Uniqueness
+
+Within a lockfile:
+
+- `packages` MUST contain at most one entry for each package `name`
+- every `edge.from` and `edge.to` value MUST refer to a package in `packages`
+
+### 10.4 Reproducibility
 
 When a valid lockfile is present, consumers MUST prefer the lockfile over live dependency solving.
 
@@ -300,7 +364,7 @@ When a valid lockfile is present, consumers MUST prefer the lockfile over live d
 
 Install state records what is currently active in a given runtime-visible skills directory.
 
-The install-state file MUST conform to [schemas/install-state-v1.schema.json](/Users/ciocanu/personal/code/project-cumasach/schemas/install-state-v1.schema.json).
+The install-state file MUST conform to [../../schemas/install-state-v1.schema.json](../../schemas/install-state-v1.schema.json).
 
 ### 11.1 Purpose
 
@@ -321,6 +385,12 @@ Install state exists to support:
 
 The `active` array records exactly one active version per skill name in the target runtime-visible directory.
 
+### 11.4 History semantics
+
+Each history entry MUST record the post-action active snapshot for that action.
+
+Each snapshot entry in `history` MUST include enough information to re-fetch the selected artifact after local cache eviction, including its source reference.
+
 ## 12. Activation Model
 
 ### 12.1 Flat runtime requirement
@@ -330,6 +400,7 @@ The runtime-visible skills directory is flat.
 For a given target directory:
 
 - only one active directory per skill name MAY exist
+- the active directory name MUST equal the manifest `name`
 - multiple versions of the same skill MUST NOT coexist under the same runtime-visible root
 
 ### 12.2 Local store
@@ -350,7 +421,7 @@ Installing a newer version of a skill into the same target active view replaces 
 
 ### 13.1 Requirement
 
-A compliant installer SHOULD retain enough state to restore a previously active resolved set.
+A compliant consumer MUST retain enough recorded state to restore a previously active resolved set.
 
 ### 13.2 Mechanism
 
@@ -376,6 +447,7 @@ Version 1 leaves policy expression implementation-defined, but a compliant ecosy
 A consumer MUST fail a package when any of the following is true:
 
 - the tarball contains more than one top-level skill directory
+- the top-level skill directory name differs from manifest `name`
 - `SKILL.md` is missing
 - `.skill/manifest.json` is missing
 - the mirrored manifest does not match the OCI config blob
@@ -385,7 +457,7 @@ A consumer MUST fail a package when any of the following is true:
 
 ## 16. Example
 
-An example package layout is provided in [examples/skill-python-development](/Users/ciocanu/personal/code/project-cumasach/examples/skill-python-development).
+An example package layout is provided in [../../examples/python-development](../../examples/python-development).
 
 ## 17. Future Work
 
