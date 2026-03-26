@@ -107,6 +107,9 @@ func writeEntry(tarWriter *tar.Writer, sourceDir, currentPath string) error {
 	}
 
 	name := archiveName(sourceDir, currentPath)
+	if _, err := validateArchivePath(name); err != nil {
+		return err
+	}
 	header := &tar.Header{
 		Name:    name,
 		ModTime: unixEpoch,

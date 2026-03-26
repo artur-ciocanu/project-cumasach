@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 )
 
 var unixEpoch = time.Unix(0, 0).UTC()
+var windowsDrivePathPattern = regexp.MustCompile(`^[A-Za-z]:([/\\]|$)`)
 
 type archiveState struct {
 	topLevel      string
@@ -41,6 +43,7 @@ func inspectArchive(r io.Reader, onFile func(header *tar.Header, reader io.Reade
 
 	tarReader := tar.NewReader(gzipReader)
 	state := archiveState{}
+	seenEntries := map[string]struct{}{}
 
 	for {
 		header, err := tarReader.Next()
@@ -55,6 +58,10 @@ func inspectArchive(r io.Reader, onFile func(header *tar.Header, reader io.Reade
 		if err != nil {
 			return archiveState{}, err
 		}
+		if _, exists := seenEntries[cleanName]; exists {
+			return archiveState{}, fmt.Errorf("invalid archive entry %q: duplicate path %q", header.Name, cleanName)
+		}
+		seenEntries[cleanName] = struct{}{}
 
 		topLevel := topLevelName(cleanName)
 		if topLevel == "" {
@@ -139,9 +146,14 @@ func validateArchivePath(name string) (string, error) {
 	if strings.HasPrefix(name, "/") {
 		return "", fmt.Errorf("invalid archive entry %q: absolute paths are not allowed", name)
 	}
+	if windowsDrivePathPattern.MatchString(name) {
+		return "", fmt.Errorf("invalid archive entry %q: absolute paths are not allowed", name)
+	}
 
 	trimmed := strings.TrimSuffix(name, "/")
-	for _, component := range strings.Split(trimmed, "/") {
+	for _, component := range strings.FieldsFunc(trimmed, func(r rune) bool {
+		return r == '/' || r == '\\'
+	}) {
 		if component == "" || component == "." {
 			continue
 		}

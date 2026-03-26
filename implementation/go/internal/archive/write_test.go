@@ -31,6 +31,25 @@ func TestWriteTGZDeterministic(t *testing.T) {
 	}
 }
 
+func TestWriteTGZRejectsInvalidControlCharactersInSourcePaths(t *testing.T) {
+	sourceDir, expectedManifest := createSkillTree(t, "list-directory")
+
+	badPath := filepath.Join(sourceDir, "references", "bad\nname.txt")
+	if err := os.WriteFile(badPath, []byte("bad\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(badPath) error = %v", err)
+	}
+
+	var archive bytes.Buffer
+	err := WriteTGZ(&archive, sourceDir, expectedManifest)
+	if err == nil {
+		t.Fatal("WriteTGZ() error = nil, want invalid path character failure")
+	}
+
+	if !strings.Contains(err.Error(), "invalid path characters") {
+		t.Fatalf("WriteTGZ() error = %q, want invalid path characters context", err)
+	}
+}
+
 func TestReadManifestTGZReturnsManifest(t *testing.T) {
 	sourceDir, expectedManifest := createSkillTree(t, "list-directory")
 	archiveBytes := writeArchiveBytes(t, sourceDir, expectedManifest)
@@ -168,6 +187,96 @@ func TestReadManifestTGZRejectsPathTraversalEntries(t *testing.T) {
 	}
 }
 
+func TestReadManifestTGZRejectsWindowsAbsolutePaths(t *testing.T) {
+	archiveBytes := buildArchive(t,
+		tarEntry{
+			Name:     "list-directory/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/SKILL.md",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     []byte("# list-directory\n"),
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/manifest.json",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     mustManifestJSON(t, "list-directory"),
+		},
+		tarEntry{
+			Name:     "C:\\tmp\\pwn",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     []byte("nope"),
+		},
+	)
+
+	_, err := ReadManifestTGZ(bytes.NewReader(archiveBytes))
+	if err == nil {
+		t.Fatal("ReadManifestTGZ() error = nil, want Windows absolute path failure")
+	}
+
+	if !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("ReadManifestTGZ() error = %q, want absolute path context", err)
+	}
+}
+
+func TestReadManifestTGZRejectsDuplicateEntries(t *testing.T) {
+	archiveBytes := buildArchive(t,
+		tarEntry{
+			Name:     "list-directory/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/SKILL.md",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     []byte("# list-directory\n"),
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/manifest.json",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     mustManifestJSON(t, "list-directory"),
+		},
+		tarEntry{
+			Name:     "list-directory/references/dup.txt",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     []byte("first"),
+		},
+		tarEntry{
+			Name:     "list-directory/references/dup.txt",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     []byte("second"),
+		},
+	)
+
+	_, err := ReadManifestTGZ(bytes.NewReader(archiveBytes))
+	if err == nil {
+		t.Fatal("ReadManifestTGZ() error = nil, want duplicate entry failure")
+	}
+
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("ReadManifestTGZ() error = %q, want duplicate context", err)
+	}
+}
+
 func TestExtractTGZTempSafelyExtractsArchive(t *testing.T) {
 	sourceDir, expectedManifest := createSkillTree(t, "list-directory")
 	archiveBytes := writeArchiveBytes(t, sourceDir, expectedManifest)
@@ -234,6 +343,59 @@ func TestExtractTGZTempRejectsPathTraversalEntries(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "path traversal") {
 		t.Fatalf("ExtractTGZTemp() error = %q, want path traversal context", err)
+	}
+}
+
+func TestExtractTGZTempRejectsDuplicateEntries(t *testing.T) {
+	archiveBytes := buildArchive(t,
+		tarEntry{
+			Name:     "list-directory/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/SKILL.md",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     []byte("# list-directory\n"),
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/manifest.json",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     mustManifestJSON(t, "list-directory"),
+		},
+		tarEntry{
+			Name:     "list-directory/references/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/references/dup.txt",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     []byte("first"),
+		},
+		tarEntry{
+			Name:     "list-directory/references/dup.txt",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     []byte("second"),
+		},
+	)
+
+	_, _, err := ExtractTGZTemp(bytes.NewReader(archiveBytes), t.TempDir())
+	if err == nil {
+		t.Fatal("ExtractTGZTemp() error = nil, want duplicate entry failure")
+	}
+
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("ExtractTGZTemp() error = %q, want duplicate context", err)
 	}
 }
 
