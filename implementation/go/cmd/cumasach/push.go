@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -48,7 +47,7 @@ func pushPackage(ctx context.Context, registry oci.Registry, packagePath, reposi
 	}
 	defer archiveFile.Close()
 
-	mirroredManifest, err := archivepkg.ReadManifestTGZ(archiveFile)
+	mirroredManifestBytes, mirroredManifest, err := archivepkg.ReadMirroredManifestTGZ(archiveFile)
 	if err != nil {
 		return "", fmt.Errorf("read mirrored manifest from package archive: %w", err)
 	}
@@ -62,7 +61,7 @@ func pushPackage(ctx context.Context, registry oci.Registry, packagePath, reposi
 		tag = mirroredManifest.Version
 	}
 
-	pushed, err := oci.Push(ctx, registry, repository, mustMarshalManifest(mirroredManifest), archiveBytes, oci.PushOptions{
+	pushed, err := oci.Push(ctx, registry, repository, mirroredManifestBytes, archiveBytes, oci.PushOptions{
 		Tag: tag,
 	})
 	if err != nil {
@@ -70,12 +69,4 @@ func pushPackage(ctx context.Context, registry oci.Registry, packagePath, reposi
 	}
 
 	return pushed.Canonical(), nil
-}
-
-func mustMarshalManifest(value any) []byte {
-	data, err := json.Marshal(value)
-	if err != nil {
-		panic(fmt.Sprintf("marshal manifest JSON: %v", err))
-	}
-	return data
 }

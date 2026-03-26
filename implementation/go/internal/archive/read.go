@@ -20,6 +20,7 @@ var windowsDrivePathPattern = regexp.MustCompile(`^[A-Za-z]:([/\\]|$)`)
 type archiveState struct {
 	topLevel      string
 	manifest      manifest.Manifest
+	manifestBytes []byte
 	manifestFound bool
 	skillFound    bool
 	manifestPath  string
@@ -32,6 +33,15 @@ func ReadManifestTGZ(r io.Reader) (manifest.Manifest, error) {
 	}
 
 	return state.manifest, nil
+}
+
+func ReadMirroredManifestTGZ(r io.Reader) ([]byte, manifest.Manifest, error) {
+	state, err := inspectArchive(r, nil)
+	if err != nil {
+		return nil, manifest.Manifest{}, err
+	}
+
+	return append([]byte(nil), state.manifestBytes...), state.manifest, nil
 }
 
 func inspectArchive(r io.Reader, onFile func(header *tar.Header, reader io.Reader, cleanName string) error) (archiveState, error) {
@@ -94,6 +104,7 @@ func inspectArchive(r io.Reader, onFile func(header *tar.Header, reader io.Reade
 				}
 
 				state.manifest = loaded
+				state.manifestBytes = append([]byte(nil), manifestBytes...)
 				state.manifestFound = true
 				state.manifestPath = cleanName
 				if onFile != nil {

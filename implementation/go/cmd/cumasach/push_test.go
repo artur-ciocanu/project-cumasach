@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	archivepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/archive"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/packagex"
 )
@@ -53,6 +54,15 @@ func TestPushCommandPushesPackageAndPrintsCanonicalReference(t *testing.T) {
 
 			if _, _, err := registry.ResolveReference(context.Background(), "registry.example.com/agentskills/list-directory", "1.2.3"); err != nil {
 				t.Fatalf("ResolveReference(tag) error = %v", err)
+			}
+
+			wantManifestBytes := readMirroredManifestBytes(t, packagePath)
+			fetched, err := oci.Fetch(context.Background(), registry, output)
+			if err != nil {
+				t.Fatalf("Fetch() error = %v", err)
+			}
+			if !bytes.Equal(fetched.Config, wantManifestBytes) {
+				t.Fatalf("fetched config bytes = %q, want mirrored manifest bytes %q", fetched.Config, wantManifestBytes)
 			}
 		})
 	}
@@ -129,6 +139,23 @@ func buildFixturePackage(t *testing.T) string {
 	}
 
 	return outputPath
+}
+
+func readMirroredManifestBytes(t *testing.T, packagePath string) []byte {
+	t.Helper()
+
+	archiveFile, err := os.Open(packagePath)
+	if err != nil {
+		t.Fatalf("Open(package) error = %v", err)
+	}
+	defer archiveFile.Close()
+
+	manifestBytes, _, err := archivepkg.ReadMirroredManifestTGZ(archiveFile)
+	if err != nil {
+		t.Fatalf("ReadMirroredManifestTGZ() error = %v", err)
+	}
+
+	return manifestBytes
 }
 
 func swapPushRegistry(t *testing.T, registry oci.Registry) func() {
