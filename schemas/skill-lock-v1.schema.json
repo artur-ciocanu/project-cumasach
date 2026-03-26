@@ -78,8 +78,7 @@
         "additionalProperties": false,
         "required": [
           "from",
-          "to",
-          "relationship"
+          "to"
         ],
         "properties": {
           "from": {
@@ -89,14 +88,6 @@
           "to": {
             "type": "string",
             "pattern": "^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$"
-          },
-          "relationship": {
-            "type": "string",
-            "enum": [
-              "required",
-              "recommended",
-              "extends"
-            ]
           }
         }
       }

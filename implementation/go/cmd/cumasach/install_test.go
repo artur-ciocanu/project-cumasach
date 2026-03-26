@@ -79,11 +79,6 @@ func TestInstallCommandRejectsUnsupportedFlags(t *testing.T) {
 			args: []string{"install", "oci://registry.example.com/agentskills/list-directory@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "--target", t.TempDir(), "--lockfile", "skill.lock.json"},
 			want: "--lockfile is not implemented",
 		},
-		{
-			name: "no-recommended",
-			args: []string{"install", "oci://registry.example.com/agentskills/list-directory@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "--target", t.TempDir(), "--no-recommended"},
-			want: "--no-recommended is not implemented",
-		},
 	}
 
 	for _, tt := range tests {
