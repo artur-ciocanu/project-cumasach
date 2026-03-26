@@ -40,7 +40,7 @@
           "name",
           "version",
           "digest",
-          "source"
+          "reference"
         ],
         "properties": {
           "name": {
@@ -49,15 +49,16 @@
           },
           "version": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
           },
           "digest": {
             "type": "string",
             "pattern": "^sha256:[a-f0-9]{64}$"
           },
-          "source": {
+          "reference": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^oci://[^@]+@sha256:[a-f0-9]{64}$",
+            "description": "Digest-pinned OCI artifact reference using the OCI manifest digest."
           }
         }
       }
@@ -95,7 +96,7 @@
                 "name",
                 "version",
                 "digest",
-                "source"
+                "reference"
               ],
               "properties": {
                 "name": {
@@ -104,15 +105,16 @@
                 },
                 "version": {
                   "type": "string",
-                  "minLength": 1
+                  "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
                 },
                 "digest": {
                   "type": "string",
                   "pattern": "^sha256:[a-f0-9]{64}$"
                 },
-                "source": {
+                "reference": {
                   "type": "string",
-                  "minLength": 1
+                  "pattern": "^oci://[^@]+@sha256:[a-f0-9]{64}$",
+                  "description": "Digest-pinned OCI artifact reference using the OCI manifest digest."
                 }
               }
             }

@@ -61,6 +61,9 @@ Version 1 is designed to satisfy these goals:
 `Resolution graph`
 : The directed graph of selected packages and dependency edges produced during dependency solving.
 
+`Artifact reference`
+: A fully qualified OCI locator in the form `oci://<registry>/<repository>@sha256:<manifest-digest>`.
+
 ## 5. Package Structure
 
 ### 5.1 Required layout
@@ -105,6 +108,7 @@ When reading or extracting a package, consumers MUST reject tar entries that:
 
 - are absolute paths
 - contain `..` path traversal segments
+- contain carriage return, line feed, or NUL characters in any path component
 - are symbolic links
 - are hard links
 - are device files, fifos, or other special files
@@ -221,6 +225,17 @@ Valid `relationship` values:
 
 Dependency `version` values MUST use the Helm-compatible SemVer constraint language used for chart dependencies.
 
+For v1 interoperability, consumers MUST implement the following normalized constraint language rules:
+
+- an exact bare version MUST be a full SemVer 2.0.0 version such as `1.2.3`; partial bare versions such as `1.2` are invalid
+- a leading `v` prefix is invalid
+- the empty string is invalid
+- leading and trailing ASCII whitespace MUST be ignored
+- one or more internal ASCII whitespace characters between comparator tokens MUST be treated as a single separator
+- comparator sets separated by whitespace are logical AND
+- comparator sets separated by `||` are logical OR
+- wildcard expressions MAY use `x`, `X`, or `*`
+
 Allowed forms include:
 
 - exact versions such as `1.2.3`
@@ -232,13 +247,11 @@ Allowed forms include:
 - comparator sets such as `>=1.0.0 <2.0.0`
 - logical OR expressions using `||`
 
-Whitespace-separated comparator sets MUST be interpreted as logical AND.
-
 Consumers MUST interpret prerelease matching and comparator semantics consistently with that grammar. In particular, prerelease versions MUST NOT satisfy a constraint unless the constraint itself admits a prerelease according to the Helm-compatible semantics, for example `~1.2.3-0`.
 
 Consumers MUST reject unsupported operators or shorthand forms rather than attempting best-effort parsing.
 
-JSON Schema validation alone does not fully validate this constraint grammar in v1. Consumers MUST perform semantic validation of dependency and compatibility constraint strings in addition to schema validation.
+JSON Schema validation alone does not fully validate this constraint grammar in v1. Consumers MUST perform semantic validation of dependency constraint strings in addition to schema validation.
 
 #### 7.7.2 Dependency semantics
 
@@ -260,23 +273,7 @@ If present, it MAY include:
 
 Requirements are declarative only. A package MUST NOT bundle the referenced host binaries as part of v1 semantics.
 
-### 7.9 Compatibility
-
-`compatibility` is OPTIONAL.
-
-If present, it MAY include:
-
-- `agentSkills`: version constraint for the Agent Skills specification
-- `runtimes`: array of runtime compatibility objects
-
-Each runtime compatibility object MUST contain:
-
-- `name`
-- `version`
-
-The `version` field in `compatibility` objects MUST use the same constraint language defined in section 7.7.1.
-
-### 7.10 Source and publisher
+### 7.9 Source and publisher
 
 `source` and `publisher` are OPTIONAL metadata objects intended for provenance, policy, and discovery.
 
@@ -288,9 +285,17 @@ The `version` field in `compatibility` objects MUST use the same constraint lang
 
 If present:
 
-- it MUST list hashes for packaged files relative to the skill root
+- it MUST use UTF-8 text with one entry per line
+- each line MUST use the format `<64 lowercase hex characters><two spaces><relative path>`
+- paths MUST be relative to the skill root and MUST use `/` as the separator
+- lines MUST be sorted by path in ascending bytewise order
+- each path MUST appear at most once
 - it MUST NOT include itself
 - it SHOULD include `.skill/manifest.json`
+
+Consumers MUST fail `files.sha256` verification if the file contains malformed lines, duplicate paths, or unsorted paths.
+
+Consumers MUST NOT generate or accept package paths that cannot be represented unambiguously in this line-oriented format.
 
 Consumers MAY use `files.sha256` for offline verification, but MUST treat OCI digests and registry-backed signatures as the primary trust source when OCI metadata is available.
 
@@ -346,7 +351,10 @@ The lockfile MUST conform to [../../schemas/skill-lock-v1.schema.json](../../sch
 - `root` identifies the requested package
 - `packages` lists every resolved skill, including transitive dependencies
 - the package selected by `root.name` and `root.version` MUST also appear in `packages`
-- each package entry MUST include name, version, digest, and source reference
+- `root.reference` MUST equal the `reference` of the package entry identified by `root.name`
+- `root.reference` and each package `reference` MUST be an artifact reference
+- each package entry MUST include name, version, digest, and artifact reference
+- each package `digest` MUST equal the OCI manifest digest encoded in that package's `reference`
 - `edges` records dependency edges from parent to child package names and preserves per-edge relationship semantics
 
 ### 10.3 Uniqueness
@@ -359,6 +367,10 @@ Within a lockfile:
 ### 10.4 Reproducibility
 
 When a valid lockfile is present, consumers MUST prefer the lockfile over live dependency solving.
+
+The `root.reference` field MAY identify the originally requested root artifact reference, but in v1 it MUST still use the same digest-pinned artifact reference format as resolved package entries.
+
+JSON Schema validation alone does not fully validate artifact-reference correctness in v1. Consumers MUST perform semantic validation that each `reference` is a valid OCI artifact locator in the form defined by this specification.
 
 ## 11. Install-State Format
 
@@ -385,11 +397,19 @@ Install state exists to support:
 
 The `active` array records exactly one active version per skill name in the target runtime-visible directory.
 
+Each active entry `reference` MUST be an artifact reference, and each active entry `digest` MUST equal the OCI manifest digest encoded in that `reference`.
+
+The `active` array MUST contain at most one entry for each skill `name`.
+
 ### 11.4 History semantics
 
 Each history entry MUST record the post-action active snapshot for that action.
 
-Each snapshot entry in `history` MUST include enough information to re-fetch the selected artifact after local cache eviction, including its source reference.
+Each snapshot entry in `history` MUST include enough information to re-fetch the selected artifact after local cache eviction, including its artifact reference.
+
+Each snapshot entry `reference` MUST be an artifact reference, and each snapshot entry `digest` MUST equal the OCI manifest digest encoded in that `reference`.
+
+Each `history[].resolved` snapshot MUST contain at most one entry for each skill `name`.
 
 ## 12. Activation Model
 
@@ -441,6 +461,8 @@ Version 1 leaves policy expression implementation-defined, but a compliant ecosy
 - allowed publishers or signing identities
 - handling of missing host requirements
 - whether recommended dependencies are auto-installed
+
+Policy MUST NOT override mandatory failures required by this specification, including invalid package layout, manifest mismatch, and unsatisfied required dependencies.
 
 ## 15. Failure Conditions
 

@@ -3,7 +3,7 @@
   "root": {
     "name": "python-development",
     "version": "1.2.0",
-    "reference": "oci://registry.example.com/agentskills/python-development:1.2.0"
+    "reference": "oci://registry.example.com/agentskills/python-development@sha256:1111111111111111111111111111111111111111111111111111111111111111"
   },
   "packages": [
     {

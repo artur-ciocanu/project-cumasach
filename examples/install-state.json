@@ -9,19 +9,19 @@
       "name": "python-development",
       "version": "1.2.0",
       "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-      "source": "oci://registry.example.com/agentskills/python-development@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      "reference": "oci://registry.example.com/agentskills/python-development@sha256:1111111111111111111111111111111111111111111111111111111111111111"
     },
     {
       "name": "prd",
       "version": "1.1.0",
       "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-      "source": "oci://registry.example.com/agentskills/prd@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      "reference": "oci://registry.example.com/agentskills/prd@sha256:2222222222222222222222222222222222222222222222222222222222222222"
     },
     {
       "name": "implementation",
       "version": "2.3.4",
       "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
-      "source": "oci://registry.example.com/agentskills/implementation@sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      "reference": "oci://registry.example.com/agentskills/implementation@sha256:3333333333333333333333333333333333333333333333333333333333333333"
     }
   ],
   "history": [
@@ -33,19 +33,19 @@
           "name": "python-development",
           "version": "1.2.0",
           "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-          "source": "oci://registry.example.com/agentskills/python-development@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          "reference": "oci://registry.example.com/agentskills/python-development@sha256:1111111111111111111111111111111111111111111111111111111111111111"
         },
         {
           "name": "prd",
           "version": "1.1.0",
           "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-          "source": "oci://registry.example.com/agentskills/prd@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          "reference": "oci://registry.example.com/agentskills/prd@sha256:2222222222222222222222222222222222222222222222222222222222222222"
         },
         {
           "name": "implementation",
           "version": "2.3.4",
           "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
-          "source": "oci://registry.example.com/agentskills/implementation@sha256:3333333333333333333333333333333333333333333333333333333333333333"
+          "reference": "oci://registry.example.com/agentskills/implementation@sha256:3333333333333333333333333333333333333333333333333333333333333333"
         }
       ]
     }

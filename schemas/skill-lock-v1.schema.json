@@ -29,11 +29,12 @@
         },
         "version": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
         },
         "reference": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^oci://[^@]+@sha256:[a-f0-9]{64}$",
+          "description": "Digest-pinned OCI artifact reference using the OCI manifest digest."
         }
       }
     },
@@ -56,7 +57,7 @@
           },
           "version": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
           },
           "digest": {
             "type": "string",
@@ -64,7 +65,8 @@
           },
           "reference": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^oci://[^@]+@sha256:[a-f0-9]{64}$",
+            "description": "Digest-pinned OCI artifact reference using the OCI manifest digest."
           }
         }
       }

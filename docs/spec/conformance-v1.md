@@ -47,6 +47,7 @@ The implementation MUST pass:
 - missing `.skill/manifest.json` fails
 - more than one top-level directory fails
 - tar entries with absolute paths fail
+- tar entries containing carriage return, line feed, or NUL in any path component fail
 - packages containing symlinks, hardlinks, special files, or path traversal fail
 - malformed JSON manifest fails
 - schema-invalid manifest fails
@@ -59,7 +60,7 @@ The implementation MUST pass:
 - invalid config media type rejected
 - valid content-layer media type accepted
 - invalid content-layer media type rejected
-- more than one content layer rejected for v1
+- any manifest shape other than exactly one config descriptor and one content layer rejected for v1
 - OCI config blob equals mirrored manifest byte-for-byte
 
 ### 3.3 Dependency resolution
@@ -78,6 +79,8 @@ The implementation MUST pass:
 The implementation MUST pass:
 
 - one active version per skill name in the runtime-visible directory
+- duplicate skill names in install-state `active` are rejected as malformed
+- duplicate skill names in install-state history snapshots are rejected as malformed
 - active directory name equals the selected package `name`
 - installing a new version replaces the active version in that target
 - retained older versions in local cache do not appear in active view
@@ -88,6 +91,8 @@ The implementation MUST pass:
 The implementation MUST pass:
 
 - generated lockfile pins digests for all resolved packages
+- generated lockfile uses digest-pinned OCI artifact references for `root.reference` and all package `reference` fields
+- each recorded package `digest` equals the OCI manifest digest encoded in its `reference`
 - lockfile includes the selected root package in `packages`
 - lockfile preserves dependency edges and per-edge relationship types
 - install from lockfile reproduces the same active set
@@ -102,6 +107,15 @@ The implementation MUST pass:
 - canonical config blob can be fetched with stock `oras`
 - pulled tarball digest matches the originally published content layer digest
 - pulled config blob matches the mirrored manifest
+
+### 3.7 Offline integrity file
+
+The implementation MUST pass:
+
+- valid `.skill/files.sha256` file accepted
+- unsorted `.skill/files.sha256` file rejected
+- duplicate path entries rejected
+- malformed hash lines rejected
 
 ## 4. Failure Handling Requirements
 
