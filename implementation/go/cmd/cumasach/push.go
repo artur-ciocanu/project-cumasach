@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -41,20 +42,14 @@ func newPushCmd() *cobra.Command {
 }
 
 func pushPackage(ctx context.Context, registry oci.Registry, packagePath, repository, tag string) (string, error) {
-	archiveFile, err := os.Open(packagePath)
-	if err != nil {
-		return "", fmt.Errorf("open package archive: %w", err)
-	}
-	defer archiveFile.Close()
-
-	mirroredManifestBytes, mirroredManifest, err := archivepkg.ReadMirroredManifestTGZ(archiveFile)
-	if err != nil {
-		return "", fmt.Errorf("read mirrored manifest from package archive: %w", err)
-	}
-
 	archiveBytes, err := os.ReadFile(packagePath)
 	if err != nil {
 		return "", fmt.Errorf("read package archive: %w", err)
+	}
+
+	mirroredManifestBytes, mirroredManifest, err := archivepkg.ReadMirroredManifestTGZ(bytes.NewReader(archiveBytes))
+	if err != nil {
+		return "", fmt.Errorf("read mirrored manifest from package archive: %w", err)
 	}
 
 	if tag == "" {

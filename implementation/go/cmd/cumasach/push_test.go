@@ -114,8 +114,8 @@ func TestPushCommandFailsForMissingArchive(t *testing.T) {
 	if err == nil {
 		t.Fatal("Execute() error = nil, want failure")
 	}
-	if !strings.Contains(err.Error(), "open package archive") {
-		t.Fatalf("Execute() error = %q, want open package archive failure", err)
+	if !strings.Contains(err.Error(), "read package archive") {
+		t.Fatalf("Execute() error = %q, want read package archive failure", err)
 	}
 }
 
