@@ -84,7 +84,8 @@ The implementation MUST pass:
 - active directory name equals the selected package `name`
 - installing a new version replaces the active version in that target
 - retained older versions in local cache do not appear in active view
-- flat-directory runtimes see normal skill directories only
+- flat-directory runtimes see real skill directories only
+- symbolic links, junctions, or other link-like directory entries are not exposed as active skill directories
 
 ### 3.5 Locking and rollback
 
@@ -96,7 +97,10 @@ The implementation MUST pass:
 - lockfile includes the selected root package in `packages`
 - lockfile preserves dependency edges and per-edge relationship types
 - install from lockfile reproduces the same active set
-- rollback restores the previous recorded active set
+- when install-state history is non-empty, the newest history snapshot equals the top-level `active` set
+- install-state history is ordered from oldest snapshot to newest snapshot
+- rollback restores the snapshot immediately preceding the newest recorded history snapshot
+- rollback fails when no earlier recorded snapshot exists
 
 ### 3.6 ORAS round-trip
 
@@ -110,7 +114,7 @@ The implementation MUST pass:
 
 ### 3.7 Offline integrity file
 
-The implementation MUST pass:
+A consumer implementation that advertises `.skill/files.sha256` verification support MUST pass:
 
 - valid `.skill/files.sha256` file accepted
 - unsorted `.skill/files.sha256` file rejected

@@ -271,11 +271,32 @@ If present, it MAY include:
 - `os`: array of supported operating systems
 - `env`: array of required environment variable names
 
+The `requirements` object MUST NOT contain additional fields in v1.
+
+If present:
+
+- `binaries` MUST be an array of non-empty strings
+- `os` MUST be an array containing only `darwin`, `linux`, or `windows`
+- `env` MUST be an array of non-empty strings
+
 Requirements are declarative only. A package MUST NOT bundle the referenced host binaries as part of v1 semantics.
 
 ### 7.9 Source and publisher
 
 `source` and `publisher` are OPTIONAL metadata objects intended for provenance, policy, and discovery.
+
+If present, `source` MUST NOT contain additional fields in v1.
+
+If present, `source` MAY include:
+
+- `url`: a URI identifying a human-facing project or documentation page
+- `repository`: a publisher-supplied repository or registry locator string
+
+If present, `publisher` MUST NOT contain additional fields in v1.
+
+If present, `publisher` MAY include:
+
+- `name`: a non-empty human-readable publisher name
 
 ## 8. Integrity Files
 
@@ -298,6 +319,8 @@ Consumers MUST fail `files.sha256` verification if the file contains malformed l
 Consumers MUST NOT generate or accept package paths that cannot be represented unambiguously in this line-oriented format.
 
 Consumers MAY use `files.sha256` for offline verification, but MUST treat OCI digests and registry-backed signatures as the primary trust source when OCI metadata is available.
+
+Consumers that do not implement offline verification MAY ignore `.skill/files.sha256` entirely. Consumers that do implement `.skill/files.sha256` verification MUST apply all rules in this section.
 
 ## 9. Dependency Resolution
 
@@ -405,6 +428,12 @@ The `active` array MUST contain at most one entry for each skill `name`.
 
 Each history entry MUST record the post-action active snapshot for that action.
 
+The `history` array MUST be ordered from oldest entry to newest entry.
+
+Consumers that append new install-state history MUST append to the end of the array and MUST NOT reorder earlier entries.
+
+If `history` is non-empty, the newest `history` entry MUST describe the same active set as the top-level `active` array.
+
 Each snapshot entry in `history` MUST include enough information to re-fetch the selected artifact after local cache eviction, including its artifact reference.
 
 Each snapshot entry `reference` MUST be an artifact reference, and each snapshot entry `digest` MUST equal the OCI manifest digest encoded in that `reference`.
@@ -431,7 +460,11 @@ Consumers MAY retain multiple downloaded versions in a local store outside the r
 
 Activation MUST materialize exactly one selected version of each skill into the target active view.
 
-Materialization MAY be implemented by copying, linking, or equivalent means, provided the runtime-visible result remains a normal flat skill directory layout.
+Materialization MAY use internal implementation mechanisms such as copying, reflinks, or hardlinked files, provided the runtime-visible result remains a normal flat skill directory layout.
+
+Each active skill path visible under the runtime root MUST be a real directory entry named after the selected package `name`.
+
+Consumers MUST NOT expose symbolic links, junctions, or other link-like directory entries as active skill directories in the runtime-visible view.
 
 ### 12.4 Replacement
 
@@ -449,7 +482,11 @@ Rollback MUST use recorded install state or a lockfile-equivalent historical rec
 
 ### 13.3 Behavior
 
-On rollback, the consumer MUST re-materialize the previously recorded active set into the runtime-visible directory.
+If `history` is non-empty and the newest `history` entry does not match the top-level `active` array, rollback MUST fail because the install state is malformed.
+
+On rollback, the consumer MUST re-materialize the history snapshot immediately preceding the newest history entry in the ordered install-state history.
+
+If no earlier history snapshot exists, rollback MUST fail.
 
 ## 14. Policy
 
