@@ -19,6 +19,9 @@ func Fetch(ctx context.Context, registry Registry, rawRef string) (FetchedArtifa
 	if err != nil {
 		return FetchedArtifact{}, err
 	}
+	if manifestDesc.MediaType != ocispec.MediaTypeImageManifest {
+		return FetchedArtifact{}, fmt.Errorf("OCI manifest descriptor media type %q does not match %q", manifestDesc.MediaType, ocispec.MediaTypeImageManifest)
+	}
 
 	manifestBytes, err := content.FetchAll(ctx, target, manifestDesc)
 	if err != nil {

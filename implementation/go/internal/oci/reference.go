@@ -23,6 +23,9 @@ func ParseReference(raw string) (Reference, error) {
 	if err != nil {
 		return Reference{}, fmt.Errorf("parse digest reference %q: %w", raw, err)
 	}
+	if parsedDigest.Algorithm() != digest.SHA256 {
+		return Reference{}, fmt.Errorf("OCI reference %q must use sha256 digest", raw)
+	}
 
 	return Reference{
 		Repository: repository,

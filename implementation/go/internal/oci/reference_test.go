@@ -40,3 +40,11 @@ func TestParseReferenceRejectsNonDigestReference(t *testing.T) {
 		t.Fatal("ParseReference() error = nil, want error")
 	}
 }
+
+func TestParseReferenceRejectsNonSHA256Digest(t *testing.T) {
+	raw := "registry.example.com/agentskills/list-directory@sha512:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	if _, err := ParseReference(raw); err == nil {
+		t.Fatal("ParseReference() error = nil, want error")
+	}
+}
