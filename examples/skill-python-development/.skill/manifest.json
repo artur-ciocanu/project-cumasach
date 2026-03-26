@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "v1",
+  "packageType": "skill",
+  "name": "python-development",
+  "version": "1.2.0",
+  "description": "Composable skill for Python product development workflows.",
+  "skill": {
+    "entrypoint": "SKILL.md"
+  },
+  "dependencies": [
+    {
+      "name": "prd",
+      "version": ">=1.0.0 <2.0.0",
+      "relationship": "required"
+    },
+    {
+      "name": "implementation",
+      "version": "^2.3.0",
+      "relationship": "required"
+    },
+    {
+      "name": "tdd",
+      "version": "^1.4.0",
+      "relationship": "recommended"
+    },
+    {
+      "name": "deployment",
+      "version": "^1.1.0",
+      "relationship": "recommended"
+    }
+  ],
+  "requirements": {
+    "binaries": [
+      "uv"
+    ],
+    "os": [
+      "darwin",
+      "linux"
+    ],
+    "env": []
+  },
+  "compatibility": {
+    "agentSkills": ">=1.0.0",
+    "runtimes": [
+      {
+        "name": "openclaw",
+        "version": ">=0.0.0"
+      }
+    ]
+  },
+  "source": {
+    "url": "https://example.com/skills/python-development",
+    "repository": "oci://registry.example.com/agentskills/python-development"
+  },
+  "publisher": {
+    "name": "Example Org"
+  }
+}

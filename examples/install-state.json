@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "v1",
+  "target": {
+    "path": "~/.openclaw/skills",
+    "runtime": "openclaw"
+  },
+  "active": [
+    {
+      "name": "python-development",
+      "version": "1.2.0",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "source": "oci://registry.example.com/agentskills/python-development@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "name": "prd",
+      "version": "1.1.0",
+      "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "source": "oci://registry.example.com/agentskills/prd@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "history": [
+    {
+      "timestamp": "2026-03-25T19:30:00Z",
+      "action": "install",
+      "resolved": [
+        {
+          "name": "python-development",
+          "version": "1.2.0",
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "name": "prd",
+          "version": "1.1.0",
+          "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ]
+    }
+  ]
+}
