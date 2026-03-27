@@ -18,7 +18,10 @@ func SelectVersion(tags []string, rawConstraint string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return selectVersionWithConstraint(tags, constraint)
+}
 
+func selectVersionWithConstraint(tags []string, constraint Constraint) (string, error) {
 	candidates := filterVersionCandidates(tags)
 	if !constraint.IsZero() {
 		candidates = selectMatchingCandidates(candidates, constraint)

@@ -130,8 +130,12 @@ func (r *packageResolver) selectPackage(name, repository string, constraints []s
 		return SelectedPackage{}, fmt.Errorf("list tags for dependency %q in %q: %w", name, repository, err)
 	}
 
-	merged := strings.Join(constraints, " ")
-	version, err := SelectVersion(tags, merged)
+	constraint, err := mergeOptionalConstraints(constraints)
+	if err != nil {
+		return SelectedPackage{}, fmt.Errorf("merge constraints for dependency %q: %w", name, err)
+	}
+
+	version, err := selectVersionWithConstraint(tags, constraint)
 	if err != nil {
 		return SelectedPackage{}, fmt.Errorf("select version for dependency %q: %w", name, err)
 	}
@@ -177,6 +181,13 @@ func (r *packageResolver) fetchSelectedByReference(reference string) (SelectedPa
 func ParseDependencyConstraint(raw string) error {
 	_, err := ParseConstraint(raw)
 	return err
+}
+
+func mergeOptionalConstraints(raws []string) (Constraint, error) {
+	if len(raws) == 0 {
+		return Constraint{}, nil
+	}
+	return MergeConstraints(raws...)
 }
 
 func appendUnique(values []string, value string) []string {

@@ -319,6 +319,40 @@ func TestResolveGraph(t *testing.T) {
 		assertGraphEdges(t, graph, "right", "shared")
 	})
 
+	t.Run("shared dependency merges OR constraints by logical AND", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		pushGraphSkill(t, registry, "registry.example.com/agentskills/shared", manifestpkg.Manifest{
+			SchemaVersion: "v1", PackageType: "skill", Name: "shared", Version: "1.5.0", Skill: manifestpkg.Skill{Entrypoint: "SKILL.md"},
+		})
+		pushGraphSkill(t, registry, "registry.example.com/agentskills/shared", manifestpkg.Manifest{
+			SchemaVersion: "v1", PackageType: "skill", Name: "shared", Version: "3.2.0", Skill: manifestpkg.Skill{Entrypoint: "SKILL.md"},
+		})
+		pushGraphSkill(t, registry, "registry.example.com/agentskills/left", manifestpkg.Manifest{
+			SchemaVersion: "v1", PackageType: "skill", Name: "left", Version: "1.0.0", Skill: manifestpkg.Skill{Entrypoint: "SKILL.md"},
+			Dependencies: []manifestpkg.Dependency{{Name: "shared", Version: ">=1.0.0 <2.0.0 || ^3.0.0"}},
+		})
+		pushGraphSkill(t, registry, "registry.example.com/agentskills/right", manifestpkg.Manifest{
+			SchemaVersion: "v1", PackageType: "skill", Name: "right", Version: "1.0.0", Skill: manifestpkg.Skill{Entrypoint: "SKILL.md"},
+			Dependencies: []manifestpkg.Dependency{{Name: "shared", Version: "^3.1.0"}},
+		})
+		rootRef := pushGraphSkill(t, registry, "registry.example.com/agentskills/root", manifestpkg.Manifest{
+			SchemaVersion: "v1", PackageType: "skill", Name: "root", Version: "1.0.0", Skill: manifestpkg.Skill{Entrypoint: "SKILL.md"},
+			Dependencies: []manifestpkg.Dependency{
+				{Name: "left", Version: "^1.0.0"},
+				{Name: "right", Version: "^1.0.0"},
+			},
+		})
+
+		graph, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		if err != nil {
+			t.Fatalf("ResolveGraph() error = %v", err)
+		}
+
+		if got := graph.Packages["shared"].Version; got != "3.2.0" {
+			t.Fatalf("shared version = %q, want %q", got, "3.2.0")
+		}
+	})
+
 	t.Run("shared dependency with incompatible constraints", func(t *testing.T) {
 		registry := oci.NewMemoryRegistry()
 		pushGraphSkill(t, registry, "registry.example.com/agentskills/shared", manifestpkg.Manifest{
