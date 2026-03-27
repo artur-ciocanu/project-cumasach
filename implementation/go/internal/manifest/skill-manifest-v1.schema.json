@@ -49,8 +49,7 @@
         "additionalProperties": false,
         "required": [
           "name",
-          "version",
-          "relationship"
+          "version"
         ],
         "properties": {
           "name": {
@@ -61,14 +60,6 @@
             "type": "string",
             "minLength": 1,
             "description": "Helm-compatible SemVer constraint string. Full grammar validation is semantic and must be performed by consumers."
-          },
-          "relationship": {
-            "type": "string",
-            "enum": [
-              "required",
-              "recommended",
-              "extends"
-            ]
           }
         }
       }

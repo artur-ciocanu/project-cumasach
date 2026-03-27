@@ -213,13 +213,6 @@ If present, each dependency object MUST contain:
 
 - `name`
 - `version`
-- `relationship`
-
-Valid `relationship` values:
-
-- `required`
-- `recommended`
-- `extends`
 
 #### 7.7.1 Constraint language
 
@@ -255,11 +248,11 @@ JSON Schema validation alone does not fully validate this constraint grammar in 
 
 #### 7.7.2 Dependency semantics
 
-- `required`: the consumer MUST include exactly one compatible version in the resolved graph. If no such version can be resolved, installation MUST fail.
-- `recommended`: the consumer SHOULD include a compatible version unless disabled by policy.
-- `extends`: the consumer MAY surface this relationship for composition, but MUST NOT treat it as a hard install requirement.
+Each listed dependency is required.
 
-Policy MUST NOT downgrade `required` into best-effort behavior.
+The consumer MUST include exactly one compatible version of each listed dependency in the resolved graph.
+
+If no compatible version can be resolved for any listed dependency, installation MUST fail.
 
 ### 7.8 Requirements
 
@@ -342,17 +335,9 @@ If dependency constraints cannot be satisfied, installation MUST fail.
 
 Consumers MUST NOT guess, silently downgrade, or activate multiple versions of the same skill name in a single active view.
 
-### 9.4 Recommended dependencies
+### 9.4 Dependency cycles
 
-Recommended dependencies SHOULD be installed by default only when policy permits.
-
-### 9.5 Extends dependencies
-
-`extends` dependencies are descriptive. They MUST NOT by themselves cause installation failure.
-
-### 9.6 Dependency cycles
-
-If the resolved graph contains a cycle of `required` dependencies, consumers MUST fail unless the cycle can be represented with one selected version per skill name and no unresolved constraints remain.
+If the resolved graph contains a dependency cycle, consumers MUST fail.
 
 Implementations SHOULD reject self-dependencies.
 
@@ -378,7 +363,7 @@ The lockfile MUST conform to [../../schemas/skill-lock-v1.schema.json](../../sch
 - `root.reference` and each package `reference` MUST be an artifact reference
 - each package entry MUST include name, version, digest, and artifact reference
 - each package `digest` MUST equal the OCI manifest digest encoded in that package's `reference`
-- `edges` records dependency edges from parent to child package names and preserves per-edge relationship semantics
+- `edges` records required dependency edges from parent to child package names
 
 ### 10.3 Uniqueness
 
@@ -497,9 +482,8 @@ Version 1 leaves policy expression implementation-defined, but a compliant ecosy
 - allowed registries
 - allowed publishers or signing identities
 - handling of missing host requirements
-- whether recommended dependencies are auto-installed
 
-Policy MUST NOT override mandatory failures required by this specification, including invalid package layout, manifest mismatch, and unsatisfied required dependencies.
+Policy MUST NOT override mandatory failures required by this specification, including invalid package layout, manifest mismatch, and unsatisfied dependencies.
 
 ## 15. Failure Conditions
 

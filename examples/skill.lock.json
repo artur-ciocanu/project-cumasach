@@ -40,23 +40,19 @@
   "edges": [
     {
       "from": "python-development",
-      "to": "prd",
-      "relationship": "required"
+      "to": "prd"
     },
     {
       "from": "python-development",
-      "to": "implementation",
-      "relationship": "required"
+      "to": "implementation"
     },
     {
       "from": "python-development",
-      "to": "tdd",
-      "relationship": "recommended"
+      "to": "tdd"
     },
     {
       "from": "python-development",
-      "to": "deployment",
-      "relationship": "recommended"
+      "to": "deployment"
     }
   ]
 }

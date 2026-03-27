@@ -16,7 +16,6 @@ func newInstallCmd() *cobra.Command {
 	var targetDir string
 	var from string
 	var lockfile string
-	var noRecommended bool
 
 	cmd := &cobra.Command{
 		Use:   "install artifact-ref",
@@ -42,9 +41,6 @@ func newInstallCmd() *cobra.Command {
 			}
 			if lockfile != "" {
 				return fmt.Errorf("--lockfile is not implemented in this slice")
-			}
-			if noRecommended {
-				return fmt.Errorf("--no-recommended is not implemented in this slice")
 			}
 			if _, err := oci.ParseReference(args[0]); err != nil {
 				if !isLikelyArtifactReference(args[0]) {
@@ -76,7 +72,6 @@ func newInstallCmd() *cobra.Command {
 	cmd.Flags().StringVar(&targetDir, "target", "", "Target flat skills directory")
 	cmd.Flags().StringVar(&from, "from", "", "Repository base for package-name resolution")
 	cmd.Flags().StringVar(&lockfile, "lockfile", "", "Install from a lockfile")
-	cmd.Flags().BoolVar(&noRecommended, "no-recommended", false, "Disable recommended dependency resolution")
 
 	return cmd
 }

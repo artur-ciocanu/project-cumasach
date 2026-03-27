@@ -70,8 +70,7 @@ The implementation MUST pass:
 - satisfiable `required` dependency graph resolves
 - unsatisfied `required` dependency graph fails
 - dependency ranges use the Helm-compatible constraint grammar defined by the packaging spec
-- `recommended` dependency can be omitted by policy
-- `extends` dependency never blocks install by itself
+- dependency cycles fail resolution
 - conflicting constraints on the same skill fail resolution
 
 ### 3.4 Activation
@@ -95,7 +94,7 @@ The implementation MUST pass:
 - generated lockfile uses digest-pinned OCI artifact references for `root.reference` and all package `reference` fields
 - each recorded package `digest` equals the OCI manifest digest encoded in its `reference`
 - lockfile includes the selected root package in `packages`
-- lockfile preserves dependency edges and per-edge relationship types
+- lockfile preserves dependency edges between selected packages
 - install from lockfile reproduces the same active set
 - when install-state history is non-empty, the newest history snapshot equals the top-level `active` set
 - install-state history is ordered from oldest snapshot to newest snapshot

@@ -201,7 +201,7 @@ If `--tag` is omitted, implementations SHOULD default the publication tag to the
 Form A, root-driven install:
 
 ```text
-cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>] [--lockfile <file>] [--no-recommended]
+cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>] [--lockfile <file>]
 ```
 
 Form B, lockfile-driven install:
@@ -243,10 +243,6 @@ If `--lockfile` is also supplied in form A:
 - the CLI MUST install the exact resolved graph described by the lockfile
 - the CLI MUST NOT perform live dependency re-resolution except as required to fetch the pinned artifact references recorded in the lockfile
 
-If `--no-recommended` is supplied:
-
-- the resolver MUST omit `recommended` dependencies during live resolution
-
 ### 9.5 Lockfile-driven install behavior
 
 If form B is used:
@@ -258,7 +254,6 @@ If form B is used:
 When `--lockfile` is the only input source:
 
 - `--from` MUST NOT be required
-- `--no-recommended` MUST be rejected
 
 ### 9.6 Failure conditions
 
@@ -269,7 +264,6 @@ When `--lockfile` is the only input source:
 - the dependency graph is unsatisfied
 - a lockfile is malformed
 - a supplied lockfile and requested root identity disagree
-- `--no-recommended` is used together with `--lockfile`
 - the target activation would violate the one-active-version-per-name rule
 
 ## 10. `lock`
@@ -281,7 +275,7 @@ When `--lockfile` is the only input source:
 ### 10.2 Invocation
 
 ```text
-cumasach lock <artifact-ref|package-name> [--from <oci-base>] [--output <file>] [--no-recommended]
+cumasach lock <artifact-ref|package-name> [--from <oci-base>] [--output <file>]
 ```
 
 ### 10.3 Required behavior
@@ -301,8 +295,6 @@ If `--output` is omitted, implementations SHOULD write:
 ```text
 ./skill.lock.json
 ```
-
-If `--no-recommended` is supplied, the resolver MUST omit `recommended` dependencies during live resolution.
 
 ### 10.4 Failure conditions
 
@@ -381,9 +373,9 @@ The v1 CLI command surface is:
 
 - `cumasach package <skill-dir> [--output <file>] [--files-sha256]`
 - `cumasach push <package.tgz> <oci-repo> [--tag <tag>]`
-- `cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>] [--lockfile <file>] [--no-recommended]`
+- `cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>] [--lockfile <file>]`
 - `cumasach install --lockfile <file> --target <skills-dir>`
-- `cumasach lock <artifact-ref|package-name> [--from <oci-base>] [--output <file>] [--no-recommended]`
+- `cumasach lock <artifact-ref|package-name> [--from <oci-base>] [--output <file>]`
 - `cumasach rollback --target <skills-dir>`
 - `cumasach verify <package.tgz|artifact-ref>`
 

@@ -19,9 +19,8 @@ type Skill struct {
 }
 
 type Dependency struct {
-	Name         string `json:"name"`
-	Version      string `json:"version"`
-	Relationship string `json:"relationship"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 
 type Requirements struct {
