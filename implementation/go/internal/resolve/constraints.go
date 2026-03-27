@@ -73,6 +73,10 @@ func (c Constraint) IsZero() bool {
 }
 
 func validateConstraintSyntax(raw string) error {
+	if strings.Contains(raw, ",") {
+		return fmt.Errorf("invalid constraint %q", raw)
+	}
+
 	tokens := strings.Fields(strings.ReplaceAll(raw, "||", " || "))
 	if len(tokens) == 0 {
 		return fmt.Errorf("constraint must not be empty")
