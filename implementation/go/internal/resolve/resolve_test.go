@@ -84,6 +84,14 @@ func TestParseConstraint(t *testing.T) {
 		}
 	})
 
+	t.Run("invalid unsupported shorthand and coercions", func(t *testing.T) {
+		for _, raw := range []string{"=>1.2.3", "=<1.2.3", "~>1.2.3"} {
+			if _, err := ParseConstraint(raw); err == nil {
+				t.Fatalf("ParseConstraint(%q) error = nil, want invalid shorthand/coercion", raw)
+			}
+		}
+	})
+
 	t.Run("valid comparator sets", func(t *testing.T) {
 		if _, err := ParseConstraint(">=1.0.0 <2.0.0"); err != nil {
 			t.Fatalf("ParseConstraint() error = %v", err)

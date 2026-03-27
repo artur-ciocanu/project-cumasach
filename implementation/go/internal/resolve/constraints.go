@@ -82,6 +82,9 @@ func validateConstraintSyntax(raw string) error {
 		if token == "||" || token == "-" {
 			continue
 		}
+		if hasUnsupportedConstraintPrefix(token) {
+			return fmt.Errorf("invalid constraint %q", raw)
+		}
 
 		core := trimConstraintOperator(token)
 		if core == "" {
@@ -96,6 +99,15 @@ func validateConstraintSyntax(raw string) error {
 	}
 
 	return nil
+}
+
+func hasUnsupportedConstraintPrefix(token string) bool {
+	for _, prefix := range []string{"=>", "=<", "~>"} {
+		if strings.HasPrefix(token, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func trimConstraintOperator(token string) string {
