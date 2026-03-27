@@ -39,6 +39,8 @@ func ResolveGraph(ctx context.Context, registry oci.Registry, root Root) (Graph,
 		return Graph{}, err
 	}
 
+	resolver.pruneUnreachable(rootPkg.Name)
+
 	return Graph{
 		Root:     rootPkg.Name,
 		Packages: resolver.selected,
@@ -197,4 +199,32 @@ func appendUnique(values []string, value string) []string {
 		}
 	}
 	return append(values, value)
+}
+
+func (r *packageResolver) pruneUnreachable(root string) {
+	reachable := make(map[string]struct{}, len(r.selected))
+	stack := []string{root}
+
+	for len(stack) > 0 {
+		name := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if _, ok := reachable[name]; ok {
+			continue
+		}
+		reachable[name] = struct{}{}
+		for _, dep := range r.edges[name] {
+			stack = append(stack, dep)
+		}
+	}
+
+	for name := range r.selected {
+		if _, ok := reachable[name]; !ok {
+			delete(r.selected, name)
+		}
+	}
+	for name := range r.edges {
+		if _, ok := reachable[name]; !ok {
+			delete(r.edges, name)
+		}
+	}
 }

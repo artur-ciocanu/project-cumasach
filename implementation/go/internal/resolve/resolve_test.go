@@ -383,6 +383,48 @@ func TestResolveGraph(t *testing.T) {
 		}
 	})
 
+	t.Run("reselection drops stale descendants from the final graph", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		pushGraphSkill(t, registry, "registry.example.com/agentskills/x", manifestpkg.Manifest{
+			SchemaVersion: "v1", PackageType: "skill", Name: "x", Version: "1.0.0", Skill: manifestpkg.Skill{Entrypoint: "SKILL.md"},
+		})
+		pushGraphSkill(t, registry, "registry.example.com/agentskills/shared", manifestpkg.Manifest{
+			SchemaVersion: "v1", PackageType: "skill", Name: "shared", Version: "1.2.0", Skill: manifestpkg.Skill{Entrypoint: "SKILL.md"},
+		})
+		pushGraphSkill(t, registry, "registry.example.com/agentskills/shared", manifestpkg.Manifest{
+			SchemaVersion: "v1", PackageType: "skill", Name: "shared", Version: "1.5.0", Skill: manifestpkg.Skill{Entrypoint: "SKILL.md"},
+			Dependencies: []manifestpkg.Dependency{{Name: "x", Version: "^1.0.0"}},
+		})
+		pushGraphSkill(t, registry, "registry.example.com/agentskills/left", manifestpkg.Manifest{
+			SchemaVersion: "v1", PackageType: "skill", Name: "left", Version: "1.0.0", Skill: manifestpkg.Skill{Entrypoint: "SKILL.md"},
+			Dependencies: []manifestpkg.Dependency{{Name: "shared", Version: ">=1.0.0 <2.0.0"}},
+		})
+		pushGraphSkill(t, registry, "registry.example.com/agentskills/right", manifestpkg.Manifest{
+			SchemaVersion: "v1", PackageType: "skill", Name: "right", Version: "1.0.0", Skill: manifestpkg.Skill{Entrypoint: "SKILL.md"},
+			Dependencies: []manifestpkg.Dependency{{Name: "shared", Version: ">=1.2.0 <1.5.0"}},
+		})
+		rootRef := pushGraphSkill(t, registry, "registry.example.com/agentskills/root", manifestpkg.Manifest{
+			SchemaVersion: "v1", PackageType: "skill", Name: "root", Version: "1.0.0", Skill: manifestpkg.Skill{Entrypoint: "SKILL.md"},
+			Dependencies: []manifestpkg.Dependency{
+				{Name: "left", Version: "^1.0.0"},
+				{Name: "right", Version: "^1.0.0"},
+			},
+		})
+
+		graph, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		if err != nil {
+			t.Fatalf("ResolveGraph() error = %v", err)
+		}
+
+		assertGraphPackages(t, graph, "root", "left", "right", "shared")
+		if _, ok := graph.Packages["x"]; ok {
+			t.Fatalf("graph.Packages unexpectedly retained stale dependency %q", "x")
+		}
+		if _, ok := graph.Edges["x"]; ok {
+			t.Fatalf("graph.Edges unexpectedly retained stale dependency %q", "x")
+		}
+	})
+
 	t.Run("dependency repo with only non semver tags fails resolution", func(t *testing.T) {
 		registry := oci.NewMemoryRegistry()
 		pushGraphSkillWithTag(t, registry, "registry.example.com/agentskills/child", "latest", manifestpkg.Manifest{
