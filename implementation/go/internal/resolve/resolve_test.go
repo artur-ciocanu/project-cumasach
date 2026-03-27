@@ -13,6 +13,16 @@ func TestSelectVersion(t *testing.T) {
 		}
 	})
 
+	t.Run("ignores tags that are not strict full semver", func(t *testing.T) {
+		got, err := SelectVersion([]string{"v1.2.3", "1.2", "1.2.3"}, "")
+		if err != nil {
+			t.Fatalf("SelectVersion() error = %v", err)
+		}
+		if got != "1.2.3" {
+			t.Fatalf("SelectVersion() = %q, want %q", got, "1.2.3")
+		}
+	})
+
 	t.Run("chooses highest satisfying stable version", func(t *testing.T) {
 		got, err := SelectVersion([]string{"1.4.0", "1.2.3", "1.3.9", "2.0.0"}, ">=1.2.0 <2.0.0")
 		if err != nil {
@@ -74,6 +84,14 @@ func TestSelectVersion(t *testing.T) {
 		_, err := SelectVersion([]string{"1.2.3-", "1.2.3+"}, "")
 		if err == nil {
 			t.Fatal("SelectVersion() error = nil, want malformed tag rejection")
+		}
+	})
+
+	t.Run("rejects unsupported constraint shorthand and coercions", func(t *testing.T) {
+		for _, constraint := range []string{"^1.2.3", "v1.2.3", "1.2"} {
+			if _, err := SelectVersion([]string{"1.2.3"}, constraint); err == nil {
+				t.Fatalf("SelectVersion(%q) error = nil, want invalid constraint", constraint)
+			}
 		}
 	})
 }

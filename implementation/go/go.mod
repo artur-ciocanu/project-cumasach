@@ -3,7 +3,6 @@ module github.com/artur-ciocanu/project-cumasach/implementation/go
 go 1.25.0
 
 require (
-	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spf13/cobra v1.10.1
