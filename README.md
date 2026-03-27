@@ -163,18 +163,17 @@ mise exec -- go run ./cmd/cumasach push ./dist/workspace-notes-1.0.0.tgz registr
 mise exec -- go run ./cmd/cumasach push ./dist/workspace-summary-1.0.0.tgz registry.example.com/agentskills/workspace-summary
 ```
 
-Then install the root skill by package name:
+Then install the root skill by package name into a fresh target directory:
 
 ```bash
 cd implementation/go
-mise exec -- go run ./cmd/cumasach install workspace-summary --from registry.example.com/agentskills --target /tmp/cumasach-skills
+mise exec -- go run ./cmd/cumasach install workspace-summary --from registry.example.com/agentskills --target /tmp/cumasach-skills-deps
 ```
 
 On success the target contains one flat directory per active skill plus install metadata:
 
 ```text
-/tmp/cumasach-skills/
-  list-directory/
+/tmp/cumasach-skills-deps/
   workspace-notes/
   workspace-summary/
   .cumasach/install-state.json
