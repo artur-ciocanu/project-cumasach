@@ -11,7 +11,7 @@ This design follows the current v1 specification after the dependency-model simp
 - dependency cycles fail resolution
 - the runtime-visible skills directory remains flat
 
-The slice is intentionally limited. It does not implement lockfiles, rollback, or multi-source dependency resolution.
+The slice is intentionally limited. It does not complete lockfile support, rollback, or multi-source dependency resolution. Those remain part of the normative v1 CLI surface and are explicitly deferred to later implementation slices.
 
 ### Goals
 
@@ -22,11 +22,18 @@ The slice is intentionally limited. It does not implement lockfiles, rollback, o
 - Record the resolved graph in install state so future lockfile and rollback work has the required data
 - Reuse the resolver design for the later `lock` slice
 
-### Non-Goals
+### Deferred v1 Work
+
+The following v1 commands and behaviors remain normative, but are not completed by this implementation slice:
 
 - `cumasach lock`
 - `cumasach install --lockfile`
 - rollback behavior
+
+This slice must not change or weaken the published v1 CLI or packaging specifications. It only stages the dependency resolver and dependency-aware root-driven install path needed to implement the remaining v1 commands later.
+
+### Non-Goals
+
 - recommended or optional dependencies
 - policy-driven dependency behavior
 - cross-registry or per-dependency source overrides
@@ -64,14 +71,12 @@ Behavior:
 - activate the full resolved graph into `--target`
 - record the resolved graph in install state
 
-### Unsupported in This Slice
+### Not Completed in This Slice
 
-- `cumasach install --lockfile ...`
-- `cumasach lock`
 - dependency resolution from multiple bases
 - non-SemVer tag selection
 
-The CLI MAY retain `--lockfile` for command-shape stability, but it MUST continue returning a clear not-implemented error in this slice.
+The live dependency resolver implemented in this slice is intended to become the shared core for the deferred `lock` and lockfile-driven `install` paths. Until those later slices land, the implementation MAY retain `--lockfile` and return a clear not-implemented error, but that interim behavior is not the final v1 end state.
 
 ## Resolution Rules
 
@@ -80,6 +85,7 @@ The CLI MAY retain `--lockfile` for command-shape stability, but it MUST continu
 - `dependencies` is OPTIONAL in the skill manifest
 - if present, every listed dependency is required
 - every dependency entry MUST include `name` and `version`
+- every dependency `version` string MUST be semantically validated against the Helm-compatible constraint grammar defined by the packaging specification before resolution begins
 - every dependency in the transitive graph MUST resolve successfully or installation MUST fail
 
 ### Version Selection
@@ -88,6 +94,8 @@ The CLI MAY retain `--lockfile` for command-shape stability, but it MUST continu
 - non-SemVer tags MUST be ignored for dependency solving
 - exact digest-pinned artifact references remain valid direct install inputs
 - when multiple versions satisfy all accumulated constraints for a package name, the resolver MUST choose the highest available version
+- prerelease versions MUST NOT satisfy a constraint unless the active constraint set explicitly admits prerelease matches according to the Helm-compatible semantics
+- stable versions MUST sort ahead of prerelease versions with the same base version unless the active constraint set admits only prerelease matches
 
 ### Constraint Merging
 
@@ -201,9 +209,13 @@ Given a resolved graph, installation MUST:
 - activate exactly one version per selected skill name into the flat target directory
 - replace any previously active directory for a selected skill name
 - leave unrelated active skill names untouched unless they collide with the selected graph
-- record the full selected graph in install state `active`
+- preserve unrelated active skills in the target view
+- record the complete resulting active target view in install state `active`, not only the newly selected graph
+- append install-state `history` according to the packaging and CLI specifications
 
 Install-state persistence MUST remain a required success condition. If activation succeeds but install-state persistence fails, the overall install MUST fail.
+
+The implementation MUST NOT leave the target directory and install-state record out of sync after a failed install. If target mutation occurs before install-state persistence completes, the implementation MUST restore the previously active target view before returning failure. An implementation MAY satisfy this by staging activation and only swapping into place once the new install-state payload is ready to commit, or by performing an explicit rollback to the previously recorded active snapshot on failure.
 
 ## Failure Cases
 
@@ -214,6 +226,7 @@ Installation MUST fail for:
 - missing dependency repositories
 - dependencies with no SemVer-compatible tags
 - unsatisfied dependency constraints
+- semantically invalid dependency constraint strings
 - dependency cycles
 - self-dependencies
 - OCI config and mirrored manifest mismatch for any fetched artifact
@@ -226,6 +239,9 @@ Installation MUST fail for:
 
 - SemVer tag filtering
 - highest-satisfying version selection
+- prerelease ordering and prerelease admission behavior
+- semantic dependency constraint validation
+- target/install-state resynchronization on post-activation failure
 - repeated dependency constraint merging
 - dependency cycle detection
 - self-dependency detection
@@ -246,6 +262,8 @@ Use the existing test-registry style to cover:
 - full resolved graph materializes as one flat directory per selected skill
 - selected dependency versions replace older active versions of the same skill name
 - install state records all selected packages in `active`
+- install state preserves unrelated active skills in the target view
+- install-state history is appended with the resulting full active snapshot
 - install fails when any resolved artifact has config/manifest mismatch
 
 ## Demo Fixtures
