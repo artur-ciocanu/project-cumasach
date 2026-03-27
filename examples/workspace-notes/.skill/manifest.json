@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "v1",
+  "packageType": "skill",
+  "name": "workspace-notes",
+  "version": "1.0.0",
+  "description": "Collects short workspace notes.",
+  "skill": {
+    "entrypoint": "SKILL.md"
+  }
+}

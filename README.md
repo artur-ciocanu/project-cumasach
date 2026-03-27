@@ -21,7 +21,7 @@ This repository now contains:
 
 - the v1 specification draft
 - JSON Schemas and examples
-- a Go reference CLI vertical slice for `package`, `push`, and exact-artifact `install`
+- a Go reference CLI slice for `package`, `push`, and dependency-aware `install`
 
 ## Repository Layout
 
@@ -33,6 +33,8 @@ This repository now contains:
 - `schemas/skill-lock-v1.schema.json`: JSON Schema for lockfiles
 - `schemas/install-state-v1.schema.json`: JSON Schema for local install state
 - `examples/list-directory`: public demo skill used in the CLI walkthrough
+- `examples/workspace-notes`: tiny dependency demo skill
+- `examples/workspace-summary`: tiny root demo skill with required dependencies
 - `examples/python-development`: example skill package layout
 - `examples/oras`: example ORAS commands for publishing and pulling skill artifacts
 - `implementation/go`: Go reference implementation of the current CLI slice
@@ -69,13 +71,13 @@ The implemented vertical slice is:
 
 - `cumasach package <skill-dir>`
 - `cumasach push <package.tgz> <oci-repo> [--tag <tag>]`
-- `cumasach install <artifact-ref> --target <skills-dir>`
+- `cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>]`
 
 Current limitations:
 
-- `install` supports exact artifact references only
-- package-name resolution is not implemented yet
-- lockfiles, dependency resolution, rollback, and verify are specified but not implemented yet
+- `install --lockfile` is still deferred
+- `lock`, rollback, and verify are specified but not implemented yet
+- dependency resolution currently covers required dependencies only
 
 ## Quick Start
 
@@ -92,9 +94,13 @@ cd implementation/go
 mise exec -- go run ./cmd/cumasach --help
 ```
 
-### Demo Skill
+### Demo Skills
 
-The public demo skill is in `examples/list-directory`.
+The public demo skills are:
+
+- `examples/list-directory`
+- `examples/workspace-notes`
+- `examples/workspace-summary`
 
 Package it:
 
@@ -142,6 +148,37 @@ The runtime-visible skill entry remains flat:
 - `/tmp/cumasach-skills/list-directory`
 
 The hidden `.cumasach/` directory is CLI metadata, not runtime-facing skill content.
+
+### Dependency-Aware Install
+
+The CLI can also resolve required dependencies from a repository base.
+
+Package and push the tiny dependency demo:
+
+```bash
+cd implementation/go
+mise exec -- go run ./cmd/cumasach package ../../examples/workspace-notes --files-sha256
+mise exec -- go run ./cmd/cumasach package ../../examples/workspace-summary --files-sha256
+mise exec -- go run ./cmd/cumasach push ./dist/workspace-notes-1.0.0.tgz registry.example.com/agentskills/workspace-notes
+mise exec -- go run ./cmd/cumasach push ./dist/workspace-summary-1.0.0.tgz registry.example.com/agentskills/workspace-summary
+```
+
+Then install the root skill by package name:
+
+```bash
+cd implementation/go
+mise exec -- go run ./cmd/cumasach install workspace-summary --from registry.example.com/agentskills --target /tmp/cumasach-skills
+```
+
+On success the target contains one flat directory per active skill plus install metadata:
+
+```text
+/tmp/cumasach-skills/
+  list-directory/
+  workspace-notes/
+  workspace-summary/
+  .cumasach/install-state.json
+```
 
 ## Non-Goals
 

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "v1",
+  "packageType": "skill",
+  "name": "workspace-summary",
+  "version": "1.0.0",
+  "description": "Combines tiny workspace inspection helpers.",
+  "skill": {
+    "entrypoint": "SKILL.md"
+  },
+  "dependencies": [
+    {
+      "name": "list-directory",
+      "version": "^1.2.3"
+    },
+    {
+      "name": "workspace-notes",
+      "version": "^1.0.0"
+    }
+  ]
+}
