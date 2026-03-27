@@ -13,8 +13,13 @@ type Activation struct {
 	hasBackup   bool
 }
 
+type PreparedSkill struct {
+	ExtractedRoot string
+	SkillName     string
+}
+
 func Activate(extractedRoot, targetDir, skillName string) (*Activation, error) {
-	if err := ensureSingleRootTarget(targetDir, skillName); err != nil {
+	if err := ensureRuntimeVisibleTarget(targetDir); err != nil {
 		return nil, err
 	}
 
@@ -64,6 +69,43 @@ func Activate(extractedRoot, targetDir, skillName string) (*Activation, error) {
 	}, nil
 }
 
+func ActivateAll(targetDir string, prepared []PreparedSkill) ([]*Activation, error) {
+	if err := ensureRuntimeVisibleTarget(targetDir); err != nil {
+		return nil, err
+	}
+
+	activations := make([]*Activation, 0, len(prepared))
+	for _, skill := range prepared {
+		activation, err := Activate(skill.ExtractedRoot, targetDir, skill.SkillName)
+		if err != nil {
+			for i := len(activations) - 1; i >= 0; i-- {
+				_ = activations[i].Rollback()
+			}
+			return nil, err
+		}
+		activations = append(activations, activation)
+	}
+	return activations, nil
+}
+
+func RollbackAll(activations []*Activation) error {
+	for i := len(activations) - 1; i >= 0; i-- {
+		if err := activations[i].Rollback(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func CommitAll(activations []*Activation) error {
+	for _, activation := range activations {
+		if err := activation.Commit(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (a *Activation) Rollback() error {
 	if a == nil {
 		return nil
@@ -89,7 +131,7 @@ func (a *Activation) Commit() error {
 	return nil
 }
 
-func ensureSingleRootTarget(targetDir, skillName string) error {
+func ensureRuntimeVisibleTarget(targetDir string) error {
 	info, err := os.Stat(targetDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -110,9 +152,6 @@ func ensureSingleRootTarget(targetDir, skillName string) error {
 		name := entry.Name()
 		if strings.HasPrefix(name, ".") {
 			continue
-		}
-		if name != skillName {
-			return fmt.Errorf("single-root install does not support existing active skill %q", name)
 		}
 		if !entry.IsDir() {
 			return fmt.Errorf("runtime-visible entry %q is not a directory", name)

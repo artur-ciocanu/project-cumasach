@@ -3,6 +3,7 @@ package install
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,8 +13,10 @@ import (
 	"time"
 
 	archivepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/archive"
+	manifestpkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/manifest"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/packagex"
+	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/resolve"
 )
 
 func TestInstallSingleRootWritesActiveDirectoryAndState(t *testing.T) {
@@ -275,12 +278,12 @@ func TestInstallFailsWhenBackupCleanupFails(t *testing.T) {
 	secondDir := mutatedSkillDir(t, "2.0.0", "# list-directory\n\nversion two\n")
 	secondRef := pushSkill(t, registry, secondDir, "registry.example.com/agentskills/list-directory")
 
-	previousCommit := commitActivation
-	commitActivation = func(*Activation) error {
+	previousCommit := commitActivations
+	commitActivations = func([]*Activation) error {
 		return errors.New("cleanup failed")
 	}
 	defer func() {
-		commitActivation = previousCommit
+		commitActivations = previousCommit
 	}()
 
 	_, err := Install(context.Background(), Options{
@@ -312,6 +315,161 @@ func TestInstallFailsWhenBackupCleanupFails(t *testing.T) {
 	}
 }
 
+func TestInstallGraph(t *testing.T) {
+	t.Run("activates resolved graph and preserves unrelated active skills", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		unrelatedRef := pushSkill(t, registry, namedSkillDir(t, "notes", "0.1.0", "# notes\n", nil), "registry.example.com/agentskills/notes")
+		if _, err := Install(context.Background(), Options{
+			Registry:  registry,
+			Reference: unrelatedRef,
+			TargetDir: targetDir,
+		}); err != nil {
+			t.Fatalf("Install(unrelated) error = %v", err)
+		}
+
+		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
+		graph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+
+		state, err := Install(context.Background(), Options{
+			Registry:  registry,
+			Graph:     &graph,
+			TargetDir: targetDir,
+		})
+		if err != nil {
+			t.Fatalf("Install(graph) error = %v", err)
+		}
+
+		for _, name := range []string{"notes", "root", "child"} {
+			if _, err := os.Stat(filepath.Join(targetDir, name, "SKILL.md")); err != nil {
+				t.Fatalf("Stat(%s/SKILL.md) error = %v", name, err)
+			}
+		}
+
+		if len(state.Active) != 3 {
+			t.Fatalf("len(state.Active) = %d, want 3", len(state.Active))
+		}
+		if !equalResolvedSets(state.Active, state.History[len(state.History)-1].Resolved) {
+			t.Fatalf("newest history = %#v, want active %#v", state.History[len(state.History)-1].Resolved, state.Active)
+		}
+	})
+
+	t.Run("replaces selected dependency and keeps full active snapshot in state", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
+		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+		firstGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir}); err != nil {
+			t.Fatalf("Install(first graph) error = %v", err)
+		}
+
+		pushResolvedSkill(t, registry, "child", "2.0.0", nil)
+		pushResolvedSkill(t, registry, "root", "2.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^2.0.0"}})
+		secondGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		state, err := Install(context.Background(), Options{Registry: registry, Graph: &secondGraph, TargetDir: targetDir})
+		if err != nil {
+			t.Fatalf("Install(second graph) error = %v", err)
+		}
+
+		if got := activeSkillVersion(t, state.Active, "child"); got != "2.0.0" {
+			t.Fatalf("active child version = %q, want %q", got, "2.0.0")
+		}
+		if len(state.History) != 2 {
+			t.Fatalf("len(state.History) = %d, want 2", len(state.History))
+		}
+		for _, skill := range state.History[len(state.History)-1].Resolved {
+			if skill.Reference == "" || skill.Digest == "" {
+				t.Fatalf("history entry = %#v, want intact reference and digest", skill)
+			}
+		}
+	})
+
+	t.Run("config mismatch in any fetched artifact fails before activation", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		rootRef := pushSkill(t, registry, namedSkillDir(t, "root", "1.0.0", "# root\n", nil), "registry.example.com/agentskills/root")
+		badArchive := buildPackageBytes(t, namedSkillDir(t, "child", "1.0.0", "# child\n", nil))
+		badConfig := []byte(`{"schemaVersion":"v1","packageType":"skill","name":"child","version":"9.9.9","skill":{"entrypoint":"SKILL.md"}}`)
+		badRef, err := oci.Push(context.Background(), registry, "registry.example.com/agentskills/child", badConfig, badArchive, oci.PushOptions{Tag: "1.0.0"})
+		if err != nil {
+			t.Fatalf("Push(bad child) error = %v", err)
+		}
+
+		graph := resolve.Graph{
+			Root: "root",
+			Packages: map[string]resolve.SelectedPackage{
+				"root": {
+					Name:      "root",
+					Version:   "1.0.0",
+					Reference: rootRef,
+					Digest:    mustParseReference(rootRef).Digest,
+				},
+				"child": {
+					Name:      "child",
+					Version:   "1.0.0",
+					Reference: badRef.Canonical(),
+					Digest:    badRef.Digest,
+				},
+			},
+			Edges: map[string][]string{"root": []string{"child"}},
+		}
+
+		_, err = Install(context.Background(), Options{Registry: registry, Graph: &graph, TargetDir: targetDir})
+		if err == nil || !strings.Contains(err.Error(), "does not match mirrored manifest") {
+			t.Fatalf("Install(graph) error = %v, want config mismatch failure", err)
+		}
+		if _, statErr := os.Stat(filepath.Join(targetDir, "root")); !os.IsNotExist(statErr) {
+			t.Fatalf("root activation should not exist, stat error = %v", statErr)
+		}
+	})
+}
+
+func TestRestoreOnStateWriteFailure(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	targetDir := t.TempDir()
+
+	pushResolvedSkill(t, registry, "child", "1.0.0", nil)
+	pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+	firstGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+	if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir}); err != nil {
+		t.Fatalf("Install(first graph) error = %v", err)
+	}
+	beforeState, err := LoadState(targetDir)
+	if err != nil {
+		t.Fatalf("LoadState(before) error = %v", err)
+	}
+
+	pushResolvedSkill(t, registry, "child", "2.0.0", nil)
+	pushResolvedSkill(t, registry, "root", "2.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^2.0.0"}})
+	secondGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+
+	_, err = Install(context.Background(), Options{
+		Registry:    registry,
+		Graph:       &secondGraph,
+		TargetDir:   targetDir,
+		StateWriter: func(string, State) error { return errors.New("boom") },
+	})
+	if err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("Install(graph) error = %v, want state write failure", err)
+	}
+
+	afterState, err := LoadState(targetDir)
+	if err != nil {
+		t.Fatalf("LoadState(after) error = %v", err)
+	}
+	if !equalResolvedSets(beforeState.Active, afterState.Active) {
+		t.Fatalf("active after rollback = %#v, want %#v", afterState.Active, beforeState.Active)
+	}
+	if got := activeSkillVersion(t, afterState.Active, "child"); got != "1.0.0" {
+		t.Fatalf("active child version after rollback = %q, want %q", got, "1.0.0")
+	}
+}
+
 func pushSkill(t *testing.T, registry *oci.MemoryRegistry, skillDir, repository string) string {
 	t.Helper()
 
@@ -320,13 +478,36 @@ func pushSkill(t *testing.T, registry *oci.MemoryRegistry, skillDir, repository 
 	if err != nil {
 		t.Fatalf("ReadMirroredManifestTGZ() error = %v", err)
 	}
+	var mirroredManifest manifestpkg.Manifest
+	if err := json.Unmarshal(mirroredManifestBytes, &mirroredManifest); err != nil {
+		t.Fatalf("json.Unmarshal(mirrored manifest) error = %v", err)
+	}
 
-	ref, err := oci.Push(context.Background(), registry, repository, mirroredManifestBytes, archiveBytes, oci.PushOptions{})
+	ref, err := oci.Push(context.Background(), registry, repository, mirroredManifestBytes, archiveBytes, oci.PushOptions{Tag: mirroredManifest.Version})
 	if err != nil {
 		t.Fatalf("Push() error = %v", err)
 	}
 
 	return ref.Canonical()
+}
+
+func pushResolvedSkill(t *testing.T, registry *oci.MemoryRegistry, name, version string, dependencies []manifestpkg.Dependency) string {
+	t.Helper()
+	return pushSkill(t, registry, namedSkillDir(t, name, version, "# "+name+"\n", dependencies), "registry.example.com/agentskills/"+name)
+}
+
+func resolveGraphForInstall(t *testing.T, registry *oci.MemoryRegistry, rootName, base string) resolve.Graph {
+	t.Helper()
+
+	root, err := resolve.NewNamedRoot(rootName, base)
+	if err != nil {
+		t.Fatalf("NewNamedRoot() error = %v", err)
+	}
+	graph, err := resolve.ResolveGraph(context.Background(), registry, root)
+	if err != nil {
+		t.Fatalf("ResolveGraph() error = %v", err)
+	}
+	return graph
 }
 
 func buildPackageBytes(t *testing.T, skillDir string) []byte {
@@ -378,6 +559,34 @@ func mutatedSkillDir(t *testing.T, version, skillBody string) string {
 	return root
 }
 
+func namedSkillDir(t *testing.T, name, version, skillBody string, dependencies []manifestpkg.Dependency) string {
+	t.Helper()
+
+	root := filepath.Join(t.TempDir(), name)
+	if err := os.MkdirAll(filepath.Join(root, ".skill"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(.skill) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "SKILL.md"), []byte(skillBody), 0o644); err != nil {
+		t.Fatalf("WriteFile(SKILL.md) error = %v", err)
+	}
+
+	manifestBytes, err := json.MarshalIndent(manifestpkg.Manifest{
+		SchemaVersion: "v1",
+		PackageType:   "skill",
+		Name:          name,
+		Version:       version,
+		Skill:         manifestpkg.Skill{Entrypoint: "SKILL.md"},
+		Dependencies:  dependencies,
+	}, "", "  ")
+	if err != nil {
+		t.Fatalf("json.MarshalIndent(manifest) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".skill", "manifest.json"), manifestBytes, 0o644); err != nil {
+		t.Fatalf("WriteFile(manifest) error = %v", err)
+	}
+	return root
+}
+
 func copyDir(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -403,3 +612,14 @@ func copyDir(src, dst string) error {
 }
 
 func equalResolvedSets(left, right []ResolvedSkill) bool { return equalResolvedSlices(left, right) }
+
+func activeSkillVersion(t *testing.T, active []ResolvedSkill, name string) string {
+	t.Helper()
+	for _, skill := range active {
+		if skill.Name == name {
+			return skill.Version
+		}
+	}
+	t.Fatalf("active skill %q not found in %#v", name, active)
+	return ""
+}

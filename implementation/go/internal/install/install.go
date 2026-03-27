@@ -6,30 +6,33 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	archivepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/archive"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
+	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/resolve"
 )
 
 type Options struct {
 	Registry    oci.Registry
 	Reference   string
+	Graph       *resolve.Graph
 	TargetDir   string
 	Now         func() time.Time
 	StateWriter func(string, State) error
 }
 
-var commitActivation = func(activation *Activation) error {
-	return activation.Commit()
+var commitActivations = func(activations []*Activation) error {
+	return CommitAll(activations)
 }
 
 func Install(ctx context.Context, options Options) (State, error) {
 	if options.Registry == nil {
 		return State{}, fmt.Errorf("registry is required")
 	}
-	if options.Reference == "" {
-		return State{}, fmt.Errorf("artifact reference is required")
+	if options.Reference == "" && options.Graph == nil {
+		return State{}, fmt.Errorf("artifact reference or resolved graph is required")
 	}
 	if options.TargetDir == "" {
 		return State{}, fmt.Errorf("target directory is required")
@@ -47,62 +50,124 @@ func Install(ctx context.Context, options Options) (State, error) {
 		return State{}, fmt.Errorf("create target parent directory: %w", err)
 	}
 
-	fetched, err := oci.Fetch(ctx, options.Registry, options.Reference)
+	prepared, resolved, err := prepareInstall(ctx, options)
 	if err != nil {
 		return State{}, err
 	}
+	defer cleanupPrepared(prepared)
 
-	mirroredManifestBytes, mirroredManifest, err := archivepkg.ReadMirroredManifestTGZ(bytes.NewReader(fetched.Archive))
-	if err != nil {
-		return State{}, fmt.Errorf("read mirrored manifest from fetched archive: %w", err)
-	}
-	if !bytes.Equal(fetched.Config, mirroredManifestBytes) {
-		return State{}, fmt.Errorf("OCI config blob does not match mirrored manifest")
-	}
-
-	extractedRoot, extractedManifest, err := archivepkg.ExtractTGZTemp(bytes.NewReader(fetched.Archive), filepath.Dir(options.TargetDir))
-	if err != nil {
-		return State{}, fmt.Errorf("extract fetched archive: %w", err)
-	}
-	defer os.RemoveAll(filepath.Dir(extractedRoot))
-
-	if extractedManifest.Name != mirroredManifest.Name || extractedManifest.Version != mirroredManifest.Version {
-		return State{}, fmt.Errorf("extracted manifest does not match mirrored manifest")
-	}
-
-	activation, err := Activate(extractedRoot, options.TargetDir, mirroredManifest.Name)
+	activations, err := ActivateAll(options.TargetDir, prepared)
 	if err != nil {
 		return State{}, err
-	}
-
-	resolved := ResolvedSkill{
-		Name:      mirroredManifest.Name,
-		Version:   mirroredManifest.Version,
-		Digest:    mustParseReference(fetched.Reference).Digest,
-		Reference: fetched.Reference,
 	}
 
 	state, err := nextState(options.TargetDir, resolved, now().UTC())
 	if err != nil {
-		if rollbackErr := activation.Rollback(); rollbackErr != nil {
+		if rollbackErr := RollbackAll(activations); rollbackErr != nil {
 			return State{}, fmt.Errorf("%w; rollback failed: %v", err, rollbackErr)
 		}
 		return State{}, err
 	}
 	if err := stateWriter(options.TargetDir, state); err != nil {
-		if rollbackErr := activation.Rollback(); rollbackErr != nil {
+		if rollbackErr := RollbackAll(activations); rollbackErr != nil {
 			return State{}, fmt.Errorf("%w; rollback failed: %v", err, rollbackErr)
 		}
 		return State{}, err
 	}
-	if err := commitActivation(activation); err != nil {
+	if err := commitActivations(activations); err != nil {
 		return State{}, fmt.Errorf("install succeeded but cleanup failed: %w", err)
 	}
 
 	return state, nil
 }
 
-func nextState(targetDir string, resolved ResolvedSkill, timestamp time.Time) (State, error) {
+func prepareInstall(ctx context.Context, options Options) ([]PreparedSkill, []ResolvedSkill, error) {
+	if options.Graph != nil {
+		return prepareGraphInstall(ctx, options.Registry, options.TargetDir, *options.Graph)
+	}
+
+	fetched, err := oci.Fetch(ctx, options.Registry, options.Reference)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	prepared, err := prepareFetchedArtifact(fetched, options.TargetDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	return []PreparedSkill{prepared.PreparedSkill}, []ResolvedSkill{prepared.Resolved}, nil
+}
+
+type preparedArtifact struct {
+	PreparedSkill
+	Resolved ResolvedSkill
+}
+
+func prepareGraphInstall(ctx context.Context, registry oci.Registry, targetDir string, graph resolve.Graph) ([]PreparedSkill, []ResolvedSkill, error) {
+	names := make([]string, 0, len(graph.Packages))
+	for name := range graph.Packages {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+
+	prepared := make([]PreparedSkill, 0, len(names))
+	resolved := make([]ResolvedSkill, 0, len(names))
+	for _, name := range names {
+		fetched, err := oci.Fetch(ctx, registry, graph.Packages[name].Reference)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		artifact, err := prepareFetchedArtifact(fetched, targetDir)
+		if err != nil {
+			return nil, nil, err
+		}
+		prepared = append(prepared, artifact.PreparedSkill)
+		resolved = append(resolved, artifact.Resolved)
+	}
+	return prepared, resolved, nil
+}
+
+func prepareFetchedArtifact(fetched oci.FetchedArtifact, targetDir string) (preparedArtifact, error) {
+	mirroredManifestBytes, mirroredManifest, err := archivepkg.ReadMirroredManifestTGZ(bytes.NewReader(fetched.Archive))
+	if err != nil {
+		return preparedArtifact{}, fmt.Errorf("read mirrored manifest from fetched archive: %w", err)
+	}
+	if !bytes.Equal(fetched.Config, mirroredManifestBytes) {
+		return preparedArtifact{}, fmt.Errorf("OCI config blob does not match mirrored manifest")
+	}
+
+	extractedRoot, extractedManifest, err := archivepkg.ExtractTGZTemp(bytes.NewReader(fetched.Archive), filepath.Dir(targetDir))
+	if err != nil {
+		return preparedArtifact{}, fmt.Errorf("extract fetched archive: %w", err)
+	}
+	if extractedManifest.Name != mirroredManifest.Name || extractedManifest.Version != mirroredManifest.Version {
+		return preparedArtifact{}, fmt.Errorf("extracted manifest does not match mirrored manifest")
+	}
+
+	return preparedArtifact{
+		PreparedSkill: PreparedSkill{
+			ExtractedRoot: extractedRoot,
+			SkillName:     mirroredManifest.Name,
+		},
+		Resolved: ResolvedSkill{
+			Name:      mirroredManifest.Name,
+			Version:   mirroredManifest.Version,
+			Digest:    mustParseReference(fetched.Reference).Digest,
+			Reference: fetched.Reference,
+		},
+	}, nil
+}
+
+func cleanupPrepared(prepared []PreparedSkill) {
+	for _, skill := range prepared {
+		if skill.ExtractedRoot != "" {
+			_ = os.RemoveAll(filepath.Dir(skill.ExtractedRoot))
+		}
+	}
+}
+
+func nextState(targetDir string, selected []ResolvedSkill, timestamp time.Time) (State, error) {
 	previous, exists, err := LoadStateIfExists(targetDir)
 	if err != nil {
 		return State{}, err
@@ -115,11 +180,11 @@ func nextState(targetDir string, resolved ResolvedSkill, timestamp time.Time) (S
 		history = append(history, previous.History...)
 	}
 
-	active := []ResolvedSkill{resolved}
+	active := mergeActive(previous.Active, selected)
 	history = append(history, HistoryEntry{
 		Timestamp: timestamp.Format(time.RFC3339),
 		Action:    action,
-		Resolved:  []ResolvedSkill{resolved},
+		Resolved:  append([]ResolvedSkill(nil), active...),
 	})
 
 	return State{
@@ -130,6 +195,28 @@ func nextState(targetDir string, resolved ResolvedSkill, timestamp time.Time) (S
 		Active:  active,
 		History: history,
 	}, nil
+}
+
+func mergeActive(previous, selected []ResolvedSkill) []ResolvedSkill {
+	merged := make(map[string]ResolvedSkill, len(previous)+len(selected))
+	for _, skill := range previous {
+		merged[skill.Name] = skill
+	}
+	for _, skill := range selected {
+		merged[skill.Name] = skill
+	}
+
+	names := make([]string, 0, len(merged))
+	for name := range merged {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+
+	active := make([]ResolvedSkill, 0, len(names))
+	for _, name := range names {
+		active = append(active, merged[name])
+	}
+	return active
 }
 
 func mustParseReference(raw string) oci.Reference {

@@ -2,20 +2,25 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	manifestpkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/manifest"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
+	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/packagex"
 )
 
-func TestInstallCommandInstallsArtifactIntoTarget(t *testing.T) {
+func TestInstallCommandInstallsArtifactAndDependenciesIntoTarget(t *testing.T) {
 	registry := oci.NewMemoryRegistry()
 	restore := swapInstallRegistry(t, registry)
 	defer restore()
 
-	ref := pushFixtureArtifact(t, registry)
+	pushCommandSkill(t, registry, "child", "1.0.0", nil)
+	ref := pushCommandSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
 	targetDir := t.TempDir()
 
 	cmd := newRootCmd()
@@ -32,34 +37,16 @@ func TestInstallCommandInstallsArtifactIntoTarget(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(targetDir, "list-directory", "SKILL.md")); err != nil {
-		t.Fatalf("Stat(active SKILL.md) error = %v", err)
+	for _, name := range []string{"root", "child"} {
+		if _, err := os.Stat(filepath.Join(targetDir, name, "SKILL.md")); err != nil {
+			t.Fatalf("Stat(%s/SKILL.md) error = %v", name, err)
+		}
 	}
 	if _, err := os.Stat(filepath.Join(targetDir, ".cumasach", "install-state.json")); err != nil {
 		t.Fatalf("Stat(install state) error = %v", err)
 	}
-	if output := stdout.String(); !strings.Contains(output, "installed list-directory 1.2.3") {
+	if output := stdout.String(); !strings.Contains(output, "installed root 1.0.0") {
 		t.Fatalf("stdout = %q, want installed summary", output)
-	}
-}
-
-func TestInstallCommandRejectsPackageNameResolution(t *testing.T) {
-	cmd := newRootCmd()
-	var stdout bytes.Buffer
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&stdout)
-	cmd.SetArgs([]string{
-		"install",
-		"list-directory",
-		"--target", t.TempDir(),
-	})
-
-	err := cmd.Execute()
-	if err == nil {
-		t.Fatal("Execute() error = nil, want failure")
-	}
-	if !strings.Contains(err.Error(), "package-name resolution is not implemented") {
-		t.Fatalf("Execute() error = %q, want package-name resolution failure", err)
 	}
 }
 
@@ -69,11 +56,6 @@ func TestInstallCommandRejectsUnsupportedFlags(t *testing.T) {
 		args []string
 		want string
 	}{
-		{
-			name: "from",
-			args: []string{"install", "oci://registry.example.com/agentskills/list-directory@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "--target", t.TempDir(), "--from", "registry.example.com/agentskills"},
-			want: "--from is not implemented",
-		},
 		{
 			name: "lockfile",
 			args: []string{"install", "oci://registry.example.com/agentskills/list-directory@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "--target", t.TempDir(), "--lockfile", "skill.lock.json"},
@@ -97,6 +79,81 @@ func TestInstallCommandRejectsUnsupportedFlags(t *testing.T) {
 				t.Fatalf("Execute() error = %q, want %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestInstallCommandPackageNameRequiresFrom(t *testing.T) {
+	cmd := newRootCmd()
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stdout)
+	cmd.SetArgs([]string{
+		"install",
+		"root",
+		"--target", t.TempDir(),
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want failure")
+	}
+	if !strings.Contains(err.Error(), "--from is required") {
+		t.Fatalf("Execute() error = %q, want missing --from failure", err)
+	}
+}
+
+func TestInstallCommandResolvesPackageNameDependenciesFromBase(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	restore := swapInstallRegistry(t, registry)
+	defer restore()
+
+	pushCommandSkill(t, registry, "child", "1.0.0", nil)
+	pushCommandSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+
+	targetDir := t.TempDir()
+	cmd := newRootCmd()
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stdout)
+	cmd.SetArgs([]string{
+		"install",
+		"root",
+		"--from", "registry.example.com/agentskills",
+		"--target", targetDir,
+	})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(targetDir, "child", "SKILL.md")); err != nil {
+		t.Fatalf("Stat(child/SKILL.md) error = %v", err)
+	}
+}
+
+func TestInstallCommandSurfacesUnresolvedDependencyFailures(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	restore := swapInstallRegistry(t, registry)
+	defer restore()
+
+	pushCommandSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "missing", Version: "^1.0.0"}})
+
+	cmd := newRootCmd()
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stdout)
+	cmd.SetArgs([]string{
+		"install",
+		"root",
+		"--from", "registry.example.com/agentskills",
+		"--target", t.TempDir(),
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want failure")
+	}
+	if !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("Execute() error = %q, want unresolved dependency context", err)
 	}
 }
 
@@ -168,6 +225,58 @@ func pushFixtureArtifact(t *testing.T, registry oci.Registry) string {
 		t.Fatalf("pushPackage() error = %v", err)
 	}
 	return ref
+}
+
+func pushCommandSkill(t *testing.T, registry oci.Registry, name, version string, dependencies []manifestpkg.Dependency) string {
+	t.Helper()
+
+	packagePath := buildNamedPackage(t, name, version, dependencies)
+	ref, err := pushPackage(context.Background(), registry, packagePath, "registry.example.com/agentskills/"+name, "")
+	if err != nil {
+		t.Fatalf("pushPackage() error = %v", err)
+	}
+	return ref
+}
+
+func buildNamedPackage(t *testing.T, name, version string, dependencies []manifestpkg.Dependency) string {
+	t.Helper()
+
+	skillDir := filepath.Join(t.TempDir(), name)
+	if err := os.MkdirAll(filepath.Join(skillDir, ".skill"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(.skill) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# "+name+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(SKILL.md) error = %v", err)
+	}
+
+	manifestBytes, err := json.MarshalIndent(manifestpkg.Manifest{
+		SchemaVersion: "v1",
+		PackageType:   "skill",
+		Name:          name,
+		Version:       version,
+		Skill:         manifestpkg.Skill{Entrypoint: "SKILL.md"},
+		Dependencies:  dependencies,
+	}, "", "  ")
+	if err != nil {
+		t.Fatalf("json.MarshalIndent(manifest) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, ".skill", "manifest.json"), manifestBytes, 0o644); err != nil {
+		t.Fatalf("WriteFile(manifest) error = %v", err)
+	}
+
+	packagePath := filepath.Join(t.TempDir(), name+".tgz")
+	outputFile, err := os.Create(packagePath)
+	if err != nil {
+		t.Fatalf("Create(output) error = %v", err)
+	}
+	if err := packagex.BuildTGZ(outputFile, skillDir, packagex.BuildOptions{IncludeFilesSHA256: true}); err != nil {
+		_ = outputFile.Close()
+		t.Fatalf("BuildTGZ() error = %v", err)
+	}
+	if err := outputFile.Close(); err != nil {
+		t.Fatalf("Close(output) error = %v", err)
+	}
+	return packagePath
 }
 
 func swapInstallRegistry(t *testing.T, registry oci.Registry) func() {

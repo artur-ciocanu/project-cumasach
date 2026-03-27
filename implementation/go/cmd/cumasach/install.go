@@ -5,6 +5,7 @@ import (
 
 	installpkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/install"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
+	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/resolve"
 	"github.com/spf13/cobra"
 )
 
@@ -36,32 +37,34 @@ func newInstallCmd() *cobra.Command {
 				}
 				return fmt.Errorf("artifact reference is required")
 			}
-			if from != "" {
-				return fmt.Errorf("--from is not implemented in this slice")
-			}
 			if lockfile != "" {
 				return fmt.Errorf("--lockfile is not implemented in this slice")
 			}
-			if _, err := oci.ParseReference(args[0]); err != nil {
-				if !isLikelyArtifactReference(args[0]) {
-					return fmt.Errorf("package-name resolution is not implemented in this slice")
-				}
+
+			registry := newInstallRegistry()
+			root, err := parseInstallRoot(args[0], from)
+			if err != nil {
 				return err
 			}
 
+			graph, err := resolve.ResolveGraph(cmd.Context(), registry, root)
+			if err != nil {
+				return err
+			}
 			state, err := installpkg.Install(cmd.Context(), installpkg.Options{
-				Registry:  newInstallRegistry(),
-				Reference: args[0],
+				Registry:  registry,
+				Graph:     &graph,
 				TargetDir: targetDir,
 			})
 			if err != nil {
 				return err
 			}
-			if len(state.Active) == 0 {
+			installed, ok := graph.Packages[graph.Root]
+			if !ok {
 				return fmt.Errorf("install completed without an active skill")
 			}
 
-			installed := state.Active[0]
+			_ = state
 			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "installed %s %s\n", installed.Name, installed.Version); err != nil {
 				return fmt.Errorf("write install result: %w", err)
 			}
@@ -74,6 +77,19 @@ func newInstallCmd() *cobra.Command {
 	cmd.Flags().StringVar(&lockfile, "lockfile", "", "Install from a lockfile")
 
 	return cmd
+}
+
+func parseInstallRoot(value, from string) (resolve.Root, error) {
+	if _, err := oci.ParseReference(value); err == nil {
+		return resolve.NewExactRoot(value)
+	} else if isLikelyArtifactReference(value) {
+		return resolve.Root{}, err
+	}
+
+	if from == "" {
+		return resolve.Root{}, fmt.Errorf("--from is required when installing by package name")
+	}
+	return resolve.NewNamedRoot(value, from)
 }
 
 func isLikelyArtifactReference(value string) bool {

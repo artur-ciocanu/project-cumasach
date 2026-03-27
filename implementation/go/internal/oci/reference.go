@@ -44,3 +44,37 @@ func normalizeRepository(raw string) (string, error) {
 	}
 	return strings.TrimSuffix(value, "/"), nil
 }
+
+func RepositoryParent(rawRef string) (string, error) {
+	ref, err := ParseReference(rawRef)
+	if err != nil {
+		return "", err
+	}
+
+	lastSlash := strings.LastIndex(ref.Repository, "/")
+	if lastSlash <= 0 {
+		return "", fmt.Errorf("derive dependency base from %q: ambiguous repository parent", rawRef)
+	}
+	parent := ref.Repository[:lastSlash]
+	if !strings.Contains(parent, "/") {
+		return "", fmt.Errorf("derive dependency base from %q: ambiguous repository parent", rawRef)
+	}
+	return parent, nil
+}
+
+func DependencyRepository(base, dependencyName string) (string, error) {
+	normalizedBase, err := normalizeRepository(base)
+	if err != nil {
+		return "", err
+	}
+
+	name := strings.TrimSpace(dependencyName)
+	if name == "" {
+		return "", fmt.Errorf("dependency name is empty")
+	}
+	if strings.Contains(name, "/") || strings.Contains(name, "@") {
+		return "", fmt.Errorf("dependency name %q is invalid for OCI repository construction", dependencyName)
+	}
+
+	return normalizedBase + "/" + name, nil
+}
