@@ -64,44 +64,65 @@
 - `implementation/testdata/` or existing Go test fixtures under `implementation/go/internal/...`
   - Add resolver and install graph fixtures separate from human-facing examples.
 
-## Task 1: Add Resolver Types and SemVer Utilities
+## Task 1: Build Resolver Foundation
 
 **Files:**
 - Create: `implementation/go/internal/resolve/types.go`
 - Create: `implementation/go/internal/resolve/semver.go`
+- Create: `implementation/go/internal/resolve/constraints.go`
 - Test: `implementation/go/internal/resolve/resolve_test.go`
 
-- [ ] **Step 1: Write failing resolver utility tests**
+- [ ] **Step 1: Write failing resolver foundation tests**
 
 Add tests for:
 - filtering out non-SemVer tags
+- ignoring invalid tag forms such as leading `v` and partial bare versions
 - choosing the highest satisfying stable version
+- accepting bare exact version constraints such as `1.2.3`
 - refusing prereleases unless explicitly admitted
 - preferring a stable release over a prerelease with the same base version
+- allowing unconstrained prerelease-only selection
+- invalid empty constraint strings
+- invalid leading `v` constraint versions
+- valid comparator sets such as `>=1.0.0 <2.0.0`
+- valid caret ranges such as `^1.2.3`
+- valid tilde ranges such as `~1.4.2`
+- valid OR expressions such as `>=1.0.0 <2.0.0 || ^3.0.0`
+- merged compatible constraints
+- merged incompatible constraints
+- exact root-form invariants
+- named root-form invariants
 
 - [ ] **Step 2: Run the new test file to confirm failure**
 
 Run:
 ```bash
 cd /Users/ciocanu/personal/code/project-cumasach/.worktrees/cli-dependency-slice/implementation/go
-mise exec -- go test ./internal/resolve -run TestSelectVersion -v
+mise exec -- go test ./internal/resolve -run 'Test(SelectVersion|ParseConstraint|MergeConstraints|RootForms)' -v
 ```
 
-Expected: FAIL because `internal/resolve` does not exist yet.
+Expected: FAIL until the resolver foundation is implemented.
 
-- [ ] **Step 3: Add resolver types and minimal semver helpers**
+- [ ] **Step 3: Implement resolver foundation**
 
 Implement:
 - root request types for exact reference and name-plus-base installs
 - selected package and graph structs keyed by skill name
-- tag filtering and candidate ranking helpers
+- strict tag filtering and candidate ranking helpers
+- Helm-compatible semantic validation helpers for dependency constraints
+- merged-constraint helpers that preserve the normalized v1 semantics
+
+Use a semver constraint library or current project dependency only if it can be wrapped to preserve the spec’s strict rules:
+- no leading `v`
+- no partial bare versions
+- no unsupported shorthand or coercion
 
 - [ ] **Step 4: Run the targeted tests**
 
 Run:
 ```bash
 cd /Users/ciocanu/personal/code/project-cumasach/.worktrees/cli-dependency-slice/implementation/go
-mise exec -- go test ./internal/resolve -run TestSelectVersion -v
+mise exec -- go test ./internal/resolve -run 'Test(SelectVersion|ParseConstraint|MergeConstraints|RootForms)' -v
 ```
 
 Expected: PASS
@@ -110,58 +131,11 @@ Expected: PASS
 
 ```bash
 cd /Users/ciocanu/personal/code/project-cumasach/.worktrees/cli-dependency-slice
-git add implementation/go/internal/resolve/types.go implementation/go/internal/resolve/semver.go implementation/go/internal/resolve/resolve_test.go
-git commit -m "feat: add resolver semver utilities"
+git add implementation/go/internal/resolve/types.go implementation/go/internal/resolve/semver.go implementation/go/internal/resolve/constraints.go implementation/go/internal/resolve/resolve_test.go implementation/go/go.mod implementation/go/go.sum
+git commit -m "feat: build resolver foundation"
 ```
 
-## Task 2: Add Constraint Validation and Merging
-
-**Files:**
-- Create: `implementation/go/internal/resolve/constraints.go`
-- Modify: `implementation/go/internal/resolve/resolve_test.go`
-
-- [ ] **Step 1: Write failing tests for constraint parsing**
-
-Add tests for:
-- invalid empty constraint strings
-- invalid leading `v` versions
-- valid comparator sets such as `>=1.0.0 <2.0.0`
-- merged compatible constraints
-- merged incompatible constraints
-
-- [ ] **Step 2: Run targeted tests**
-
-Run:
-```bash
-cd /Users/ciocanu/personal/code/project-cumasach/.worktrees/cli-dependency-slice/implementation/go
-mise exec -- go test ./internal/resolve -run 'Test(ParseConstraint|MergeConstraints)' -v
-```
-
-Expected: FAIL
-
-- [ ] **Step 3: Implement semantic validation and merge helpers**
-
-Use a semver constraint library or current project dependency that can enforce the Helm-compatible grammar closely enough for v1. Normalize whitespace before validation so behavior matches the spec.
-
-- [ ] **Step 4: Run targeted tests**
-
-Run:
-```bash
-cd /Users/ciocanu/personal/code/project-cumasach/.worktrees/cli-dependency-slice/implementation/go
-mise exec -- go test ./internal/resolve -run 'Test(ParseConstraint|MergeConstraints)' -v
-```
-
-Expected: PASS
-
-- [ ] **Step 5: Commit**
-
-```bash
-cd /Users/ciocanu/personal/code/project-cumasach/.worktrees/cli-dependency-slice
-git add implementation/go/internal/resolve/constraints.go implementation/go/internal/resolve/resolve_test.go implementation/go/go.mod implementation/go/go.sum
-git commit -m "feat: validate and merge dependency constraints"
-```
-
-## Task 3: Extend OCI Helpers for Resolution
+## Task 2: Extend OCI Helpers for Resolution
 
 **Files:**
 - Modify: `implementation/go/internal/oci/reference.go`
@@ -212,7 +186,7 @@ git add implementation/go/internal/oci/reference.go implementation/go/internal/o
 git commit -m "feat: extend OCI helpers for dependency resolution"
 ```
 
-## Task 4: Implement Graph Resolution
+## Task 3: Implement Graph Resolution
 
 **Files:**
 - Create: `implementation/go/internal/resolve/resolve.go`
@@ -268,7 +242,7 @@ git add implementation/go/internal/resolve/resolve.go implementation/go/internal
 git commit -m "feat: resolve required dependency graphs"
 ```
 
-## Task 5: Make Installer Graph-Aware and State-Safe
+## Task 4: Make Installer Graph-Aware and State-Safe
 
 **Files:**
 - Modify: `implementation/go/internal/install/install.go`
@@ -326,7 +300,7 @@ git add implementation/go/internal/install/install.go implementation/go/internal
 git commit -m "feat: install resolved dependency graphs"
 ```
 
-## Task 6: Wire CLI Install to the Resolver
+## Task 5: Wire CLI Install to the Resolver
 
 **Files:**
 - Modify: `implementation/go/cmd/cumasach/install.go`
@@ -377,7 +351,7 @@ git add implementation/go/cmd/cumasach/install.go implementation/go/cmd/cumasach
 git commit -m "feat: wire dependency-aware install command"
 ```
 
-## Task 7: Add Demo Skills and End-to-End Coverage
+## Task 6: Add Demo Skills and End-to-End Coverage
 
 **Files:**
 - Modify: `examples/`
