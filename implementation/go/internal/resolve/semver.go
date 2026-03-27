@@ -131,15 +131,27 @@ func admitsPrerelease(comparators []comparator) bool {
 }
 
 func parseVersion(raw string) (version, bool) {
-	main, prerelease, ok := strings.Cut(raw, "-")
-	if ok {
-		raw = main + "-" + prerelease
-		if strings.Contains(prerelease, "+") {
-			prerelease, _, _ = strings.Cut(prerelease, "+")
+	original := raw
+	if raw == "" {
+		return version{}, false
+	}
+
+	main, build, hasBuild := strings.Cut(raw, "+")
+	if hasBuild {
+		if build == "" {
+			return version{}, false
 		}
-	} else if strings.Contains(raw, "+") {
-		main, _, _ = strings.Cut(raw, "+")
-		raw = main
+		for _, id := range strings.Split(build, ".") {
+			if !validBuildIdentifier(id) {
+				return version{}, false
+			}
+		}
+	}
+
+	prerelease := ""
+	main, prerelease, hasPrerelease := strings.Cut(main, "-")
+	if hasPrerelease && prerelease == "" {
+		return version{}, false
 	}
 
 	parts := strings.Split(main, ".")
@@ -161,7 +173,7 @@ func parseVersion(raw string) (version, bool) {
 	}
 
 	parsed := version{
-		raw:   raw,
+		raw:   original,
 		major: major,
 		minor: minor,
 		patch: patch,
@@ -207,6 +219,18 @@ func validPrereleaseIdentifier(raw string) bool {
 	}
 	if allDigits && len(raw) > 1 && raw[0] == '0' {
 		return false
+	}
+	return true
+}
+
+func validBuildIdentifier(raw string) bool {
+	if raw == "" {
+		return false
+	}
+	for _, r := range raw {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' {
+			return false
+		}
 	}
 	return true
 }

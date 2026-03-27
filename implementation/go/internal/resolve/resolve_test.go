@@ -39,4 +39,21 @@ func TestSelectVersion(t *testing.T) {
 			t.Fatalf("SelectVersion() = %q, want %q", got, "1.3.0")
 		}
 	})
+
+	t.Run("preserves build metadata in selected stable tag", func(t *testing.T) {
+		got, err := SelectVersion([]string{"1.2.3+meta", "1.2.2"}, "")
+		if err != nil {
+			t.Fatalf("SelectVersion() error = %v", err)
+		}
+		if got != "1.2.3+meta" {
+			t.Fatalf("SelectVersion() = %q, want %q", got, "1.2.3+meta")
+		}
+	})
+
+	t.Run("rejects malformed semver candidates with empty prerelease or build metadata", func(t *testing.T) {
+		_, err := SelectVersion([]string{"1.2.3-", "1.2.3+"}, "")
+		if err == nil {
+			t.Fatal("SelectVersion() error = nil, want malformed tag rejection")
+		}
+	})
 }
