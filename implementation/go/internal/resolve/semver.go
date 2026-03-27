@@ -8,9 +8,15 @@ import (
 )
 
 func SelectVersion(tags []string, constraint string) (string, error) {
-	comparators, err := parseConstraintSet(constraint)
-	if err != nil {
-		return "", err
+	var (
+		comparators []selectionComparator
+		err         error
+	)
+	if strings.TrimSpace(constraint) != "" {
+		comparators, err = parseSelectionComparators(constraint)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	var candidates []version
@@ -51,19 +57,14 @@ func (v version) isPrerelease() bool {
 	return len(v.prerelease) > 0
 }
 
-type comparator struct {
+type selectionComparator struct {
 	operator string
 	version  version
 }
 
-func parseConstraintSet(raw string) ([]comparator, error) {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return nil, nil
-	}
-
-	parts := strings.Fields(value)
-	comparators := make([]comparator, 0, len(parts))
+func parseSelectionComparators(raw string) ([]selectionComparator, error) {
+	parts := strings.Fields(strings.TrimSpace(raw))
+	comparators := make([]selectionComparator, 0, len(parts))
 	for _, part := range parts {
 		operator, versionText, ok := cutComparator(part)
 		if !ok {
@@ -73,7 +74,7 @@ func parseConstraintSet(raw string) ([]comparator, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid constraint %q", raw)
 		}
-		comparators = append(comparators, comparator{
+		comparators = append(comparators, selectionComparator{
 			operator: operator,
 			version:  parsed,
 		})
@@ -90,7 +91,7 @@ func cutComparator(raw string) (string, string, bool) {
 	return "", "", false
 }
 
-func matchesAll(candidate version, comparators []comparator) bool {
+func matchesAll(candidate version, comparators []selectionComparator) bool {
 	for _, comparator := range comparators {
 		order := compareVersion(candidate, comparator.version)
 		switch comparator.operator {
@@ -121,7 +122,7 @@ func matchesAll(candidate version, comparators []comparator) bool {
 	return true
 }
 
-func admitsPrerelease(comparators []comparator) bool {
+func admitsPrerelease(comparators []selectionComparator) bool {
 	for _, comparator := range comparators {
 		if comparator.version.isPrerelease() {
 			return true
