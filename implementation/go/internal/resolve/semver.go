@@ -66,6 +66,14 @@ func parseSelectionComparators(raw string) ([]selectionComparator, error) {
 	parts := strings.Fields(strings.TrimSpace(raw))
 	comparators := make([]selectionComparator, 0, len(parts))
 	for _, part := range parts {
+		if parsed, ok := parseVersion(part); ok {
+			comparators = append(comparators, selectionComparator{
+				operator: "=",
+				version:  parsed,
+			})
+			continue
+		}
+
 		operator, versionText, ok := cutComparator(part)
 		if !ok {
 			return nil, fmt.Errorf("invalid constraint %q", raw)

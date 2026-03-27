@@ -6,9 +6,29 @@ import (
 
 // Root identifies the initial package to resolve.
 type Root struct {
-	Reference string
-	Name      string
-	OCIBase   string
+	reference string
+	name      string
+	ociBase   string
+}
+
+func NewExactRoot(reference string) Root {
+	return Root{reference: reference}
+}
+
+func NewNamedRoot(name, ociBase string) Root {
+	return Root{name: name, ociBase: ociBase}
+}
+
+func (r Root) Reference() string {
+	return r.reference
+}
+
+func (r Root) Name() string {
+	return r.name
+}
+
+func (r Root) OCIBase() string {
+	return r.ociBase
 }
 
 // SelectedPackage captures the resolved package metadata shared with install flows.
