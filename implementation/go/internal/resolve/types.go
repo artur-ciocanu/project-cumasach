@@ -1,6 +1,9 @@
 package resolve
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/manifest"
 )
 
@@ -11,12 +14,26 @@ type Root struct {
 	ociBase   string
 }
 
-func NewExactRoot(reference string) Root {
-	return Root{reference: reference}
+func NewExactRoot(reference string) (Root, error) {
+	reference = strings.TrimSpace(reference)
+	if reference == "" {
+		return Root{}, fmt.Errorf("exact root reference must not be empty")
+	}
+
+	return Root{reference: reference}, nil
 }
 
-func NewNamedRoot(name, ociBase string) Root {
-	return Root{name: name, ociBase: ociBase}
+func NewNamedRoot(name, ociBase string) (Root, error) {
+	name = strings.TrimSpace(name)
+	ociBase = strings.TrimSpace(ociBase)
+	if name == "" {
+		return Root{}, fmt.Errorf("named root name must not be empty")
+	}
+	if ociBase == "" {
+		return Root{}, fmt.Errorf("named root OCI base must not be empty")
+	}
+
+	return Root{name: name, ociBase: ociBase}, nil
 }
 
 func (r Root) Reference() string {
@@ -29,6 +46,10 @@ func (r Root) Name() string {
 
 func (r Root) OCIBase() string {
 	return r.ociBase
+}
+
+func (r Root) IsExact() bool {
+	return r.reference != ""
 }
 
 // SelectedPackage captures the resolved package metadata shared with install flows.
