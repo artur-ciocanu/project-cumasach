@@ -53,8 +53,23 @@ func Fetch(ctx context.Context, registry Registry, rawRef string) (FetchedArtifa
 	}
 
 	return FetchedArtifact{
-		Reference: ref.Canonical(),
-		Config:    configBytes,
-		Archive:   archiveBytes,
+		Reference:  ref.Canonical(),
+		Repository: ref.Repository,
+		Digest:     ref.Digest,
+		Config:     configBytes,
+		Archive:    archiveBytes,
 	}, nil
+}
+
+func ListTags(ctx context.Context, registry Registry, repository string) ([]string, error) {
+	normalizedRepo, err := normalizeRepository(repository)
+	if err != nil {
+		return nil, err
+	}
+
+	tags, err := registry.ListTags(ctx, normalizedRepo)
+	if err != nil {
+		return nil, err
+	}
+	return tags, nil
 }

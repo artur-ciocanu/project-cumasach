@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -130,6 +131,70 @@ func TestFetchRejectsManifestWithWrongLayerMediaType(t *testing.T) {
 	}
 }
 
+func TestRepositoryParentFromExactReference(t *testing.T) {
+	t.Parallel()
+
+	ref := "oci://registry.example.com/agentskills/python-development@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	base, err := RepositoryParent(ref)
+	if err != nil {
+		t.Fatalf("RepositoryParent() error = %v", err)
+	}
+	if got, want := base, "registry.example.com/agentskills"; got != want {
+		t.Fatalf("RepositoryParent() = %q, want %q", got, want)
+	}
+}
+
+func TestRepositoryParentRejectsAmbiguousExactReference(t *testing.T) {
+	t.Parallel()
+
+	ref := "oci://registry.example.com/python-development@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	_, err := RepositoryParent(ref)
+	if err == nil {
+		t.Fatal("RepositoryParent() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("RepositoryParent() error = %q, want ambiguous failure", err)
+	}
+}
+
+func TestRepositoryParentBuildsDependencyRepository(t *testing.T) {
+	t.Parallel()
+
+	repository, err := DependencyRepository("registry.example.com/agentskills", "tdd")
+	if err != nil {
+		t.Fatalf("DependencyRepository() error = %v", err)
+	}
+	if got, want := repository, "registry.example.com/agentskills/tdd"; got != want {
+		t.Fatalf("DependencyRepository() = %q, want %q", got, want)
+	}
+}
+
+func TestListTags(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	registry := NewMemoryRegistry()
+	repository := "registry.example.com/agentskills/list-directory"
+
+	for _, tag := range []string{"1.0.0", "latest", "1.2.3"} {
+		manifestJSON := []byte(`{"schemaVersion":"v1","packageType":"skill","name":"list-directory","version":"` + tag + `","skill":{"entrypoint":"SKILL.md"}}`)
+		archive := []byte("fake tgz bytes for " + tag)
+		if _, err := Push(ctx, registry, repository, manifestJSON, archive, PushOptions{Tag: tag}); err != nil {
+			t.Fatalf("Push(%q) error = %v", tag, err)
+		}
+	}
+
+	tags, err := ListTags(ctx, registry, repository)
+	if err != nil {
+		t.Fatalf("ListTags() error = %v", err)
+	}
+	if want := []string{"1.0.0", "1.2.3", "latest"}; !reflect.DeepEqual(tags, want) {
+		t.Fatalf("ListTags() = %#v, want %#v", tags, want)
+	}
+}
+
 type staticRegistry struct {
 	desc  ocispec.Descriptor
 	store *staticReadOnlyTarget
@@ -153,6 +218,10 @@ func (r staticRegistry) PushTarget(context.Context, string) (oras.Target, error)
 
 func (r staticRegistry) ResolveReference(context.Context, string, string) (oras.ReadOnlyTarget, ocispec.Descriptor, error) {
 	return r.store, r.desc, nil
+}
+
+func (r staticRegistry) ListTags(context.Context, string) ([]string, error) {
+	return nil, io.EOF
 }
 
 type staticReadOnlyTarget struct {
