@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
+	"oras.land/oras-go/v2/registry/remote"
 )
 
 func LoadFile(path string) (File, error) {
@@ -111,6 +112,9 @@ func validateReference(raw string) (oci.Reference, error) {
 	}
 	if ref.Canonical() != raw {
 		return oci.Reference{}, fmt.Errorf("reference %q is not canonical", raw)
+	}
+	if _, err := remote.NewRepository(ref.Repository); err != nil {
+		return oci.Reference{}, fmt.Errorf("repository %q is not a valid OCI locator: %w", ref.Repository, err)
 	}
 	return ref, nil
 }
