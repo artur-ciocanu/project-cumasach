@@ -132,6 +132,20 @@ func TestLoadReaderRejectsMalformedOCILocatorShape(t *testing.T) {
 	}
 }
 
+func TestLoadReaderRejectsTagQualifiedDigestReference(t *testing.T) {
+	lock := validMinimalLockfile()
+	lock.Root.Reference = "oci://registry.example.com/agentskills/root-skill:latest@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	lock.Packages[0].Reference = lock.Root.Reference
+
+	_, err := LoadReader(strings.NewReader(marshalLockfileJSON(t, lock)))
+	if err == nil {
+		t.Fatal("LoadReader() error = nil, want tag-qualified digest reference failure")
+	}
+	if !strings.Contains(err.Error(), "reference") {
+		t.Fatalf("LoadReader() error = %q, want reference context", err)
+	}
+}
+
 func TestLoadReaderRejectsPackageDigestReferenceMismatch(t *testing.T) {
 	lock := validMinimalLockfile()
 	lock.Packages[0].Digest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"

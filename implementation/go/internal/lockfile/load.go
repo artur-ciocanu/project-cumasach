@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 	"oras.land/oras-go/v2/registry/remote"
@@ -115,6 +116,9 @@ func validateReference(raw string) (oci.Reference, error) {
 	}
 	if _, err := remote.NewRepository(ref.Repository); err != nil {
 		return oci.Reference{}, fmt.Errorf("repository %q is not a valid OCI locator: %w", ref.Repository, err)
+	}
+	if strings.Contains(ref.Repository[strings.LastIndex(ref.Repository, "/")+1:], ":") {
+		return oci.Reference{}, fmt.Errorf("reference %q must not include a tag-qualified repository name", raw)
 	}
 	return ref, nil
 }
