@@ -228,6 +228,12 @@ func TestResolveGraph(t *testing.T) {
 		if got := graph.Packages["root"].Reference; got != rootRef.Canonical() {
 			t.Fatalf("root reference = %q, want exact root ref %q", got, rootRef.Canonical())
 		}
+		if got := graph.Packages["root"].Digest; got != rootRef.Digest {
+			t.Fatalf("root digest = %q, want manifest digest %q", got, rootRef.Digest)
+		}
+		if got := graph.Packages["child"].Reference; !strings.HasPrefix(got, "oci://") || !strings.Contains(got, "@sha256:") {
+			t.Fatalf("child reference = %q, want canonical digest-pinned OCI reference", got)
+		}
 	})
 
 	t.Run("transitive dependency chain", func(t *testing.T) {

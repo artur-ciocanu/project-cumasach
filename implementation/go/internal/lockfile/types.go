@@ -1,5 +1,7 @@
 package lockfile
 
+const schemaVersionV1 = "v1"
+
 type File struct {
 	SchemaVersion string    `json:"schemaVersion"`
 	Root          Root      `json:"root"`

@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/manifest"
+	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/resolve"
 )
 
 func TestLoadReaderValidMinimalLockfile(t *testing.T) {
@@ -193,6 +196,119 @@ func TestLoadReaderRejectsCyclicGraph(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "cycle") {
 		t.Fatalf("LoadReader() error = %q, want cycle context", err)
+	}
+}
+
+func TestFromGraph(t *testing.T) {
+	graph := resolve.Graph{
+		Root: "root-skill",
+		Packages: map[string]resolve.SelectedPackage{
+			"z-dependency": {
+				Name:       "z-dependency",
+				Version:    "2.0.0",
+				Reference:  "registry.example.com/agentskills/z-dependency@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				Digest:     "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				Repository: "registry.example.com/agentskills/z-dependency",
+				Manifest: manifest.Manifest{
+					SchemaVersion: "v1",
+					PackageType:   "skill",
+					Name:          "z-dependency",
+					Version:       "2.0.0",
+					Skill:         manifest.Skill{Entrypoint: "SKILL.md"},
+				},
+			},
+			"root-skill": {
+				Name:       "root-skill",
+				Version:    "1.2.3",
+				Reference:  "oci://registry.example.com/agentskills/root-skill@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Digest:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Repository: "registry.example.com/agentskills/root-skill",
+				Manifest: manifest.Manifest{
+					SchemaVersion: "v1",
+					PackageType:   "skill",
+					Name:          "root-skill",
+					Version:       "1.2.3",
+					Skill:         manifest.Skill{Entrypoint: "SKILL.md"},
+				},
+			},
+			"a-dependency": {
+				Name:       "a-dependency",
+				Version:    "1.0.0",
+				Reference:  "oci://registry.example.com/agentskills/a-dependency@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				Digest:     "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				Repository: "registry.example.com/agentskills/a-dependency",
+				Manifest: manifest.Manifest{
+					SchemaVersion: "v1",
+					PackageType:   "skill",
+					Name:          "a-dependency",
+					Version:       "1.0.0",
+					Skill:         manifest.Skill{Entrypoint: "SKILL.md"},
+				},
+			},
+		},
+		Edges: map[string][]string{
+			"z-dependency": nil,
+			"root-skill":   {"z-dependency", "a-dependency"},
+			"a-dependency": {"z-dependency"},
+		},
+	}
+
+	lock, err := FromGraph(graph)
+	if err != nil {
+		t.Fatalf("FromGraph() error = %v", err)
+	}
+
+	if lock.Root.Name != "root-skill" {
+		t.Fatalf("Root.Name = %q, want %q", lock.Root.Name, "root-skill")
+	}
+	if lock.Root.Version != "1.2.3" {
+		t.Fatalf("Root.Version = %q, want %q", lock.Root.Version, "1.2.3")
+	}
+	if lock.Root.Reference != "oci://registry.example.com/agentskills/root-skill@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("Root.Reference = %q, want canonical root reference", lock.Root.Reference)
+	}
+
+	wantPackages := []Package{
+		{
+			Name:      "a-dependency",
+			Version:   "1.0.0",
+			Digest:    "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+			Reference: "oci://registry.example.com/agentskills/a-dependency@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		},
+		{
+			Name:      "root-skill",
+			Version:   "1.2.3",
+			Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			Reference: "oci://registry.example.com/agentskills/root-skill@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		{
+			Name:      "z-dependency",
+			Version:   "2.0.0",
+			Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			Reference: "oci://registry.example.com/agentskills/z-dependency@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		},
+	}
+	if len(lock.Packages) != len(wantPackages) {
+		t.Fatalf("len(Packages) = %d, want %d", len(lock.Packages), len(wantPackages))
+	}
+	for i, want := range wantPackages {
+		if got := lock.Packages[i]; got != want {
+			t.Fatalf("Packages[%d] = %+v, want %+v", i, got, want)
+		}
+	}
+
+	wantEdges := []Edge{
+		{From: "a-dependency", To: "z-dependency"},
+		{From: "root-skill", To: "a-dependency"},
+		{From: "root-skill", To: "z-dependency"},
+	}
+	if len(lock.Edges) != len(wantEdges) {
+		t.Fatalf("len(Edges) = %d, want %d", len(lock.Edges), len(wantEdges))
+	}
+	for i, want := range wantEdges {
+		if got := lock.Edges[i]; got != want {
+			t.Fatalf("Edges[%d] = %+v, want %+v", i, got, want)
+		}
 	}
 }
 
