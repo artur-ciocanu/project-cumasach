@@ -80,6 +80,10 @@ func newInstallCmd() *cobra.Command {
 }
 
 func parseInstallRoot(value, from string) (resolve.Root, error) {
+	return parseResolveRoot(value, from, "installing")
+}
+
+func parseResolveRoot(value, from, verb string) (resolve.Root, error) {
 	if _, err := oci.ParseReference(value); err == nil {
 		return resolve.NewExactRoot(value)
 	} else if isLikelyArtifactReference(value) {
@@ -87,7 +91,7 @@ func parseInstallRoot(value, from string) (resolve.Root, error) {
 	}
 
 	if from == "" {
-		return resolve.Root{}, fmt.Errorf("--from is required when installing by package name")
+		return resolve.Root{}, fmt.Errorf("--from is required when %s by package name", verb)
 	}
 	return resolve.NewNamedRoot(value, from)
 }
