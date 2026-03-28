@@ -74,7 +74,7 @@ func FromGraph(graph resolve.Graph) (File, error) {
 		Edges:    edges,
 	}
 
-	if err := validateSemantics(lockfile); err != nil {
+	if err := validateFile(lockfile); err != nil {
 		return File{}, err
 	}
 
@@ -106,11 +106,29 @@ func marshal(lockfile File) ([]byte, error) {
 	}
 	data = append(data, '\n')
 
-	if _, err := LoadReader(bytes.NewReader(data)); err != nil {
+	if err := validateSerializedBytes(data); err != nil {
 		return nil, fmt.Errorf("re-validate serialized lockfile: %w", err)
 	}
 
 	return data, nil
+}
+
+func validateFile(lockfile File) error {
+	data, err := json.Marshal(lockfile)
+	if err != nil {
+		return fmt.Errorf("marshal lockfile for validation: %w", err)
+	}
+	if err := validate(data); err != nil {
+		return err
+	}
+	return validateSemantics(lockfile)
+}
+
+func validateSerializedBytes(data []byte) error {
+	if _, err := LoadReader(bytes.NewReader(data)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func packageName(key string, pkg resolve.SelectedPackage) (string, error) {

@@ -312,6 +312,36 @@ func TestFromGraph(t *testing.T) {
 	}
 }
 
+func TestFromGraphRejectsSchemaInvalidLockfile(t *testing.T) {
+	graph := resolve.Graph{
+		Root: "Root-Skill",
+		Packages: map[string]resolve.SelectedPackage{
+			"Root-Skill": {
+				Name:       "Root-Skill",
+				Version:    "1.2.3",
+				Reference:  "oci://registry.example.com/agentskills/root-skill@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Digest:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Repository: "registry.example.com/agentskills/root-skill",
+				Manifest: manifest.Manifest{
+					SchemaVersion: "v1",
+					PackageType:   "skill",
+					Name:          "Root-Skill",
+					Version:       "1.2.3",
+					Skill:         manifest.Skill{Entrypoint: "SKILL.md"},
+				},
+			},
+		},
+	}
+
+	_, err := FromGraph(graph)
+	if err == nil {
+		t.Fatal("FromGraph() error = nil, want schema validation failure")
+	}
+	if !strings.Contains(err.Error(), "schema") {
+		t.Fatalf("FromGraph() error = %q, want schema validation context", err)
+	}
+}
+
 func validMinimalLockfile() File {
 	return File{
 		SchemaVersion: "v1",
