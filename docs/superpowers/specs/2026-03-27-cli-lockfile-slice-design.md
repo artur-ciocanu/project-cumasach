@@ -55,6 +55,8 @@ Behavior:
 - write a deterministic `skill.lock.json`
 - pin every selected node to a canonical `oci://...@sha256:...` artifact reference
 - write the resolved graph shape, not unresolved constraints
+- accept both canonical `oci://...` and plain OCI forms for `<artifact-ref>` and `--from <oci-base>` inputs
+- treat `--from` as an OCI repository namespace prefix and derive the root repository by appending `/<package-name>` to that prefix
 
 Defaults:
 
@@ -192,6 +194,7 @@ Semantic validation MUST check:
 - every package reference is canonical and digest-pinned
 - every package `digest` exactly matches the OCI manifest digest encoded in that package's `reference`
 - every edge `from` and `to` refers to a known selected package
+- the locked graph contains no dependency cycle
 
 The schema already validates shape. The new lockfile package must validate these graph invariants explicitly.
 
@@ -204,6 +207,11 @@ Lockfile-driven installs MUST:
 - preserve unrelated active skills in the target directory
 - record the full resulting active target view in install-state `active`
 - append install-state `history` using the same rules as live install
+- preserve the packaging-spec install-state invariants:
+  - `history` remains ordered oldest to newest
+  - new entries append at the end only
+  - the newest `history` snapshot matches top-level `active`
+  - each persisted snapshot includes enough artifact reference metadata to re-fetch selected artifacts after cache eviction
 
 If target mutation succeeds but install-state persistence fails, the implementation MUST restore the previously active target view before returning failure. Lockfile mode must preserve the same target/state synchronization guarantees as live install.
 
@@ -223,6 +231,7 @@ If target mutation succeeds but install-state persistence fails, the implementat
 - missing or malformed lockfile
 - schema-invalid lockfile
 - semantically invalid lockfile graph
+- cyclic lockfile graph
 - root/lockfile identity mismatch in mixed form
 - missing pinned artifacts
 - fetched artifact package invalidity
