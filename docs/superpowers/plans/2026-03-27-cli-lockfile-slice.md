@@ -57,8 +57,10 @@
 Add tests covering:
 - valid load of a minimal lockfile
 - duplicate package names rejected
+- missing root package rejected
 - unknown edge endpoints rejected
 - root name/version/reference mismatch rejected
+- invalid canonical reference rejected
 - package `digest` and `reference` mismatch rejected
 - cyclic graph rejected
 
@@ -187,7 +189,7 @@ Attach `newLockCmd()` from `root.go` so `cumasach --help` shows the new command.
 
 Run:
 - `mise exec -- go test ./cmd/cumasach -run TestLockCommand -v`
-- `mise exec -- go test ./cmd/cumasach -run TestRootCommand -v`
+- `mise exec -- go test ./cmd/cumasach -run TestRootHelp -v`
 
 Expected: PASS
 
@@ -198,7 +200,54 @@ git add implementation/go/cmd/cumasach
 git commit -m "feat: add lock command"
 ```
 
-### Task 4: Implement Lockfile Loading And Root Matching For Install
+### Task 4: Convert Lockfiles Into The Shared Selected Graph
+
+**Files:**
+- Modify: `implementation/go/internal/lockfile/load.go`
+- Modify: `implementation/go/internal/lockfile/types.go`
+- Modify: `implementation/go/internal/lockfile/lockfile_test.go`
+- Modify: `implementation/go/internal/install/install.go`
+- Modify: `implementation/go/internal/install/install_test.go`
+
+- [ ] **Step 1: Write the failing conversion and install tests**
+
+Cover:
+- validated lockfile converts into the shared selected-graph shape
+- conversion preserves root, packages, and edges
+- fetched artifact `name` or `version` mismatch against lockfile metadata fails
+- fetched artifact digest mismatch against lockfile `digest`/`reference` fails
+- install-state `active` includes unrelated existing skills plus the locked graph
+- newest history snapshot still matches `active`
+
+Run: `mise exec -- go test ./internal/install -run 'Test(InstallFromLockfile|LockfileMismatch|StateHistory)' -v`
+Expected: FAIL because lockfile-derived graph handling is incomplete.
+
+- [ ] **Step 2: Implement lockfile-to-graph conversion**
+
+Add a conversion helper in `internal/lockfile` that produces the shared package/edge shape expected by the installer, preferably `resolve.Graph`.
+
+- [ ] **Step 3: Reuse the existing graph install path**
+
+Keep `prepareGraphInstall` as the shared fetch/prepare path. Do not duplicate activation logic.
+
+Make sure fetched artifacts are checked against lockfile metadata before activation.
+
+- [ ] **Step 4: Run the install tests**
+
+Run:
+- `mise exec -- go test ./internal/install -v`
+- `mise exec -- go test ./internal/lockfile -v`
+
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add implementation/go/internal/install implementation/go/internal/lockfile
+git commit -m "feat: convert lockfiles into install graphs"
+```
+
+### Task 5: Implement Lockfile Loading And Root Matching For Install
 
 **Files:**
 - Modify: `implementation/go/internal/lockfile/load.go`
@@ -210,6 +259,7 @@ git commit -m "feat: add lock command"
 
 Cover:
 - `install --lockfile <file> --target ...` loads lockfile mode
+- no positional arg + `--lockfile` uses the lockfile root
 - `install <package-name> --lockfile <file> --target ... --from ...` requires matching root name
 - `install <artifact-ref> --lockfile <file> --target ...` requires matching canonical root reference
 - package-name mixed form without `--from` fails
@@ -247,54 +297,11 @@ git add implementation/go/internal/lockfile implementation/go/cmd/cumasach/insta
 git commit -m "feat: add lockfile install routing"
 ```
 
-### Task 5: Reuse The Install Pipeline For Locked Graphs
-
-**Files:**
-- Modify: `implementation/go/internal/install/install.go`
-- Modify: `implementation/go/internal/install/install_test.go`
-- Modify: `implementation/go/internal/lockfile/load.go`
-
-- [ ] **Step 1: Write the failing install tests**
-
-Add tests covering:
-- lockfile-derived graph installs the same selected set as live resolution
-- fetched artifact `name` or `version` mismatch against lockfile metadata fails
-- fetched artifact digest mismatch against lockfile `digest`/`reference` fails
-- install-state `active` includes unrelated existing skills plus the locked graph
-- newest history snapshot still matches `active`
-
-Run: `mise exec -- go test ./internal/install -run 'Test(InstallFromLockfile|LockfileMismatch|StateHistory)' -v`
-Expected: FAIL because lockfile-derived graph handling is incomplete.
-
-- [ ] **Step 2: Convert validated lockfiles into the shared selected-graph shape**
-
-Add a conversion helper in `internal/lockfile` that produces the same package/edge shape needed by the installer, ideally a `resolve.Graph` or a minimal equivalent selected graph.
-
-- [ ] **Step 3: Reuse the existing graph install path**
-
-Keep `prepareGraphInstall` as the shared fetch/prepare path. Do not duplicate activation logic.
-
-Make sure fetched artifacts are checked against lockfile metadata before activation.
-
-- [ ] **Step 4: Run the install tests**
-
-Run:
-- `mise exec -- go test ./internal/install -v`
-- `mise exec -- go test ./cmd/cumasach -run TestInstallCommand -v`
-
-Expected: PASS
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add implementation/go/internal/install implementation/go/internal/lockfile
-git commit -m "feat: install locked graphs"
-```
-
 ### Task 6: End-To-End Lockfile Coverage And Docs
 
 **Files:**
 - Modify: `implementation/go/cmd/cumasach/install_e2e_test.go`
+- Modify: `implementation/go/cmd/cumasach/root_test.go`
 - Modify: `README.md`
 
 - [ ] **Step 1: Write the failing end-to-end test**
