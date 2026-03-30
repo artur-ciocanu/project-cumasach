@@ -74,10 +74,11 @@ The implemented vertical slice is:
 - `cumasach lock <artifact-ref|package-name> [--from <oci-base>] [--output <file>]`
 - `cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>] [--lockfile <file>]`
 - `cumasach install --lockfile <file> --target <skills-dir>`
+- `cumasach rollback --target <skills-dir>`
 
 Current limitations:
 
-- rollback and verify are specified but not implemented yet
+- verify is specified but not implemented yet
 - dependency resolution currently covers required dependencies only
 
 ## Quick Start

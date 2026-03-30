@@ -35,7 +35,7 @@ func TestRootHelp(t *testing.T) {
 }
 
 func TestRootHelpCommandStubsReturnNotImplemented(t *testing.T) {
-	for _, commandName := range []string{"rollback", "verify"} {
+	for _, commandName := range []string{"verify"} {
 		t.Run(commandName, func(t *testing.T) {
 			cmd := newRootCmd()
 			var stdout bytes.Buffer

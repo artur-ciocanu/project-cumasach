@@ -81,6 +81,69 @@ func Install(ctx context.Context, options Options) (State, error) {
 	return state, nil
 }
 
+func Rollback(ctx context.Context, options Options) (State, error) {
+	if options.Registry == nil {
+		return State{}, fmt.Errorf("registry is required")
+	}
+	if options.TargetDir == "" {
+		return State{}, fmt.Errorf("target directory is required")
+	}
+
+	now := options.Now
+	if now == nil {
+		now = time.Now
+	}
+	stateWriter := options.StateWriter
+	if stateWriter == nil {
+		stateWriter = WriteState
+	}
+
+	current, err := LoadState(options.TargetDir)
+	if err != nil {
+		return State{}, err
+	}
+	if len(current.History) < 2 {
+		return State{}, fmt.Errorf("rollback failed: no earlier history snapshot exists")
+	}
+
+	targetSnapshot := append([]ResolvedSkill(nil), current.History[len(current.History)-2].Resolved...)
+	graph, err := graphFromResolvedSnapshot(targetSnapshot)
+	if err != nil {
+		return State{}, err
+	}
+
+	prepared, resolved, err := prepareGraphInstall(ctx, options.Registry, options.TargetDir, graph)
+	if err != nil {
+		return State{}, err
+	}
+	defer cleanupPrepared(prepared)
+
+	activations, err := restoreSnapshot(options.TargetDir, current.Active, prepared)
+	if err != nil {
+		return State{}, err
+	}
+
+	state, err := nextRollbackState(current, targetSnapshot, now().UTC())
+	if err != nil {
+		if rollbackErr := RollbackAll(activations); rollbackErr != nil {
+			return State{}, fmt.Errorf("%w; rollback failed: %v", err, rollbackErr)
+		}
+		return State{}, err
+	}
+	if err := stateWriter(options.TargetDir, state); err != nil {
+		if rollbackErr := RollbackAll(activations); rollbackErr != nil {
+			return State{}, fmt.Errorf("%w; rollback failed: %v", err, rollbackErr)
+		}
+		return State{}, err
+	}
+	if err := commitActivations(activations); err != nil {
+		return State{}, fmt.Errorf("rollback succeeded but cleanup failed: %w", err)
+	}
+
+	_ = resolved
+	return state, nil
+}
+
 func prepareInstall(ctx context.Context, options Options) ([]PreparedSkill, []ResolvedSkill, error) {
 	if options.Graph != nil {
 		return prepareGraphInstall(ctx, options.Registry, options.TargetDir, *options.Graph)
@@ -191,6 +254,37 @@ func cleanupPrepared(prepared []PreparedSkill) {
 	}
 }
 
+func restoreSnapshot(targetDir string, current []ResolvedSkill, prepared []PreparedSkill) ([]*Activation, error) {
+	targetNames := make(map[string]struct{}, len(prepared))
+	for _, skill := range prepared {
+		targetNames[skill.SkillName] = struct{}{}
+	}
+
+	activations := make([]*Activation, 0, len(current)+len(prepared))
+	for _, active := range current {
+		if _, keep := targetNames[active.Name]; keep {
+			continue
+		}
+		activation, err := Deactivate(targetDir, active.Name)
+		if err != nil {
+			_ = RollbackAll(activations)
+			return nil, err
+		}
+		activations = append(activations, activation)
+	}
+
+	for _, skill := range prepared {
+		activation, err := Activate(skill.ExtractedRoot, targetDir, skill.SkillName)
+		if err != nil {
+			_ = RollbackAll(activations)
+			return nil, err
+		}
+		activations = append(activations, activation)
+	}
+
+	return activations, nil
+}
+
 func nextState(targetDir string, selected []ResolvedSkill, timestamp time.Time) (State, error) {
 	previous, exists, err := LoadStateIfExists(targetDir)
 	if err != nil {
@@ -218,6 +312,23 @@ func nextState(targetDir string, selected []ResolvedSkill, timestamp time.Time) 
 		},
 		Active:  active,
 		History: history,
+	}, nil
+}
+
+func nextRollbackState(previous State, selected []ResolvedSkill, timestamp time.Time) (State, error) {
+	history := make([]HistoryEntry, 0, len(previous.History)+1)
+	history = append(history, previous.History...)
+	history = append(history, HistoryEntry{
+		Timestamp: timestamp.Format(time.RFC3339),
+		Action:    "rollback",
+		Resolved:  append([]ResolvedSkill(nil), selected...),
+	})
+
+	return State{
+		SchemaVersion: SchemaVersion,
+		Target:        previous.Target,
+		Active:        append([]ResolvedSkill(nil), selected...),
+		History:       history,
 	}, nil
 }
 
@@ -249,4 +360,34 @@ func mustParseReference(raw string) oci.Reference {
 		panic(err)
 	}
 	return ref
+}
+
+func graphFromResolvedSnapshot(snapshot []ResolvedSkill) (resolve.Graph, error) {
+	if len(snapshot) == 0 {
+		return resolve.Graph{}, fmt.Errorf("rollback snapshot must not be empty")
+	}
+
+	names := make([]string, 0, len(snapshot))
+	packages := make(map[string]resolve.SelectedPackage, len(snapshot))
+	edges := make(map[string][]string, len(snapshot))
+	for _, skill := range snapshot {
+		if _, exists := packages[skill.Name]; exists {
+			return resolve.Graph{}, fmt.Errorf("rollback snapshot contains duplicate skill %q", skill.Name)
+		}
+		names = append(names, skill.Name)
+		packages[skill.Name] = resolve.SelectedPackage{
+			Name:      skill.Name,
+			Version:   skill.Version,
+			Reference: skill.Reference,
+			Digest:    skill.Digest,
+		}
+		edges[skill.Name] = nil
+	}
+	slices.Sort(names)
+
+	return resolve.Graph{
+		Root:     names[0],
+		Packages: packages,
+		Edges:    edges,
+	}, nil
 }

@@ -175,6 +175,15 @@ func (r *MemoryRegistry) ListTags(_ context.Context, repository string) ([]strin
 	return tags, nil
 }
 
+func (r *MemoryRegistry) Delete(repository, digest string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if byRepo, ok := r.manifests[repository]; ok {
+		delete(byRepo, digest)
+	}
+}
+
 func (r *MemoryRegistry) recordManifest(repository string, entry StoredManifest) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

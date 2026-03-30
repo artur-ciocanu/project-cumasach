@@ -578,6 +578,220 @@ func TestInstallFromLockfile(t *testing.T) {
 	})
 }
 
+func TestRollback(t *testing.T) {
+	t.Run("restores the immediately previous snapshot and appends rollback history", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
+		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+		firstGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		firstTime := time.Date(2026, 3, 30, 15, 0, 0, 0, time.UTC)
+		if _, err := Install(context.Background(), Options{
+			Registry:  registry,
+			Graph:     &firstGraph,
+			TargetDir: targetDir,
+			Now: func() time.Time {
+				return firstTime
+			},
+		}); err != nil {
+			t.Fatalf("Install(first graph) error = %v", err)
+		}
+
+		pushResolvedSkill(t, registry, "child", "2.0.0", nil)
+		pushResolvedSkill(t, registry, "root", "2.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^2.0.0"}})
+		secondGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		secondTime := time.Date(2026, 3, 30, 16, 0, 0, 0, time.UTC)
+		if _, err := Install(context.Background(), Options{
+			Registry:  registry,
+			Graph:     &secondGraph,
+			TargetDir: targetDir,
+			Now: func() time.Time {
+				return secondTime
+			},
+		}); err != nil {
+			t.Fatalf("Install(second graph) error = %v", err)
+		}
+
+		rollbackTime := time.Date(2026, 3, 30, 17, 0, 0, 0, time.UTC)
+		state, err := Rollback(context.Background(), Options{
+			Registry:  registry,
+			TargetDir: targetDir,
+			Now: func() time.Time {
+				return rollbackTime
+			},
+		})
+		if err != nil {
+			t.Fatalf("Rollback() error = %v", err)
+		}
+
+		if got := activeSkillVersion(t, state.Active, "child"); got != "1.0.0" {
+			t.Fatalf("active child version after rollback = %q, want %q", got, "1.0.0")
+		}
+		if got := activeSkillVersion(t, state.Active, "root"); got != "1.0.0" {
+			t.Fatalf("active root version after rollback = %q, want %q", got, "1.0.0")
+		}
+		if len(state.History) != 3 {
+			t.Fatalf("len(state.History) = %d, want 3", len(state.History))
+		}
+		if got := state.History[2].Action; got != "rollback" {
+			t.Fatalf("state.History[2].Action = %q, want %q", got, "rollback")
+		}
+		if got := state.History[2].Timestamp; got != rollbackTime.Format(time.RFC3339) {
+			t.Fatalf("state.History[2].Timestamp = %q, want %q", got, rollbackTime.Format(time.RFC3339))
+		}
+		if !equalResolvedSets(state.Active, state.History[2].Resolved) {
+			t.Fatalf("newest history = %#v, want active %#v", state.History[2].Resolved, state.Active)
+		}
+	})
+
+	t.Run("re-fetches the previous snapshot artifacts by canonical reference", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
+		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+		firstGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir}); err != nil {
+			t.Fatalf("Install(first graph) error = %v", err)
+		}
+
+		pushResolvedSkill(t, registry, "child", "2.0.0", nil)
+		pushResolvedSkill(t, registry, "root", "2.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^2.0.0"}})
+		secondGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &secondGraph, TargetDir: targetDir}); err != nil {
+			t.Fatalf("Install(second graph) error = %v", err)
+		}
+
+		stateBeforeRollback, err := LoadState(targetDir)
+		if err != nil {
+			t.Fatalf("LoadState(before rollback) error = %v", err)
+		}
+		firstSnapshot := stateBeforeRollback.History[0].Resolved
+		for _, skill := range firstSnapshot {
+			ref, err := oci.ParseReference(skill.Reference)
+			if err != nil {
+				t.Fatalf("ParseReference(%q) error = %v", skill.Reference, err)
+			}
+			registry.Delete(ref.Repository, ref.Digest)
+		}
+
+		_, err = Rollback(context.Background(), Options{Registry: registry, TargetDir: targetDir})
+		if err == nil {
+			t.Fatal("Rollback() error = nil, want fetch failure after old artifacts are removed")
+		}
+		if !strings.Contains(err.Error(), "artifact") && !strings.Contains(err.Error(), "not found") {
+			t.Fatalf("Rollback() error = %q, want fetch failure context", err)
+		}
+	})
+
+	t.Run("fails when there is no earlier snapshot", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		ref := pushSkill(t, registry, fixtureSkillDir(t), "registry.example.com/agentskills/list-directory")
+		if _, err := Install(context.Background(), Options{
+			Registry:  registry,
+			Reference: ref,
+			TargetDir: targetDir,
+		}); err != nil {
+			t.Fatalf("Install() error = %v", err)
+		}
+
+		_, err := Rollback(context.Background(), Options{Registry: registry, TargetDir: targetDir})
+		if err == nil {
+			t.Fatal("Rollback() error = nil, want missing previous snapshot failure")
+		}
+		if !strings.Contains(err.Error(), "no earlier history snapshot") {
+			t.Fatalf("Rollback() error = %q, want missing previous snapshot context", err)
+		}
+	})
+
+	t.Run("fails when install state is malformed", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		statePath := StatePath(targetDir)
+		if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+			t.Fatalf("MkdirAll(state dir) error = %v", err)
+		}
+		raw := `{
+  "schemaVersion": "v1",
+  "target": {"path": "` + targetDir + `"},
+  "active": [],
+  "history": [
+    {
+      "timestamp": "2026-03-30T15:00:00Z",
+      "action": "install",
+      "resolved": [
+        {
+          "name": "root",
+          "version": "1.0.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "reference": "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ]
+}`
+		if err := os.WriteFile(statePath, []byte(raw), 0o644); err != nil {
+			t.Fatalf("WriteFile(bad state) error = %v", err)
+		}
+
+		_, err := Rollback(context.Background(), Options{Registry: registry, TargetDir: targetDir})
+		if err == nil {
+			t.Fatal("Rollback() error = nil, want malformed state failure")
+		}
+		if !strings.Contains(err.Error(), "active does not match newest history snapshot") {
+			t.Fatalf("Rollback() error = %q, want semantic validation context", err)
+		}
+	})
+
+	t.Run("restores the pre-rollback active view when state writing fails", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
+		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+		firstGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir}); err != nil {
+			t.Fatalf("Install(first graph) error = %v", err)
+		}
+
+		pushResolvedSkill(t, registry, "child", "2.0.0", nil)
+		pushResolvedSkill(t, registry, "root", "2.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^2.0.0"}})
+		secondGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &secondGraph, TargetDir: targetDir}); err != nil {
+			t.Fatalf("Install(second graph) error = %v", err)
+		}
+
+		beforeRollback, err := LoadState(targetDir)
+		if err != nil {
+			t.Fatalf("LoadState(before rollback) error = %v", err)
+		}
+
+		_, err = Rollback(context.Background(), Options{
+			Registry:    registry,
+			TargetDir:   targetDir,
+			StateWriter: func(string, State) error { return errors.New("boom") },
+		})
+		if err == nil || !strings.Contains(err.Error(), "boom") {
+			t.Fatalf("Rollback() error = %v, want state write failure", err)
+		}
+
+		afterFailure, err := LoadState(targetDir)
+		if err != nil {
+			t.Fatalf("LoadState(after failure) error = %v", err)
+		}
+		if !equalResolvedSets(beforeRollback.Active, afterFailure.Active) {
+			t.Fatalf("active after failed rollback = %#v, want %#v", afterFailure.Active, beforeRollback.Active)
+		}
+		if got := activeSkillVersion(t, afterFailure.Active, "child"); got != "2.0.0" {
+			t.Fatalf("active child version after failed rollback = %q, want %q", got, "2.0.0")
+		}
+	})
+}
+
 func pushSkill(t *testing.T, registry *oci.MemoryRegistry, skillDir, repository string) string {
 	t.Helper()
 

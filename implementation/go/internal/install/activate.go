@@ -11,6 +11,7 @@ type Activation struct {
 	activePath  string
 	backupPath  string
 	hasBackup   bool
+	removedOnly bool
 }
 
 type PreparedSkill struct {
@@ -88,6 +89,36 @@ func ActivateAll(targetDir string, prepared []PreparedSkill) ([]*Activation, err
 	return activations, nil
 }
 
+func Deactivate(targetDir, skillName string) (*Activation, error) {
+	if err := ensureRuntimeVisibleTarget(targetDir); err != nil {
+		return nil, err
+	}
+
+	activePath := filepath.Join(targetDir, skillName)
+	if _, err := os.Stat(activePath); err != nil {
+		if os.IsNotExist(err) {
+			return &Activation{activePath: activePath}, nil
+		}
+		return nil, fmt.Errorf("stat active skill for removal: %w", err)
+	}
+
+	backupPath, err := os.MkdirTemp(targetDir, "."+skillName+".backup-")
+	if err != nil {
+		return nil, fmt.Errorf("create rollback backup directory: %w", err)
+	}
+	_ = os.RemoveAll(backupPath)
+	if err := os.Rename(activePath, backupPath); err != nil {
+		return nil, fmt.Errorf("backup existing active skill for removal: %w", err)
+	}
+
+	return &Activation{
+		activePath:  activePath,
+		backupPath:  backupPath,
+		hasBackup:   true,
+		removedOnly: true,
+	}, nil
+}
+
 func RollbackAll(activations []*Activation) error {
 	for i := len(activations) - 1; i >= 0; i-- {
 		if err := activations[i].Rollback(); err != nil {
@@ -108,6 +139,14 @@ func CommitAll(activations []*Activation) error {
 
 func (a *Activation) Rollback() error {
 	if a == nil {
+		return nil
+	}
+	if a.removedOnly {
+		if a.hasBackup {
+			if err := os.Rename(a.backupPath, a.activePath); err != nil {
+				return fmt.Errorf("restore removed active skill during rollback: %w", err)
+			}
+		}
 		return nil
 	}
 	if err := os.RemoveAll(a.activePath); err != nil {

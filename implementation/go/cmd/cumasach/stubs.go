@@ -6,10 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newRollbackCmd() *cobra.Command {
-	return newNotImplementedCmd("rollback", "Roll back to a previous install-state snapshot")
-}
-
 func newVerifyCmd() *cobra.Command {
 	return newNotImplementedCmd("verify", "Verify a skill package or installed skill")
 }
