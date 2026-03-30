@@ -113,12 +113,13 @@ func prepareGraphInstall(ctx context.Context, registry oci.Registry, targetDir s
 	prepared := make([]PreparedSkill, 0, len(names))
 	resolved := make([]ResolvedSkill, 0, len(names))
 	for _, name := range names {
-		fetched, err := oci.Fetch(ctx, registry, graph.Packages[name].Reference)
+		selected := graph.Packages[name]
+		fetched, err := oci.Fetch(ctx, registry, selected.Reference)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		artifact, err := prepareFetchedArtifact(fetched, targetDir)
+		artifact, err := prepareFetchedArtifactForSelected(fetched, targetDir, selected)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -157,6 +158,29 @@ func prepareFetchedArtifact(fetched oci.FetchedArtifact, targetDir string) (prep
 			Reference: fetched.Reference,
 		},
 	}, nil
+}
+
+func prepareFetchedArtifactForSelected(fetched oci.FetchedArtifact, targetDir string, selected resolve.SelectedPackage) (preparedArtifact, error) {
+	artifact, err := prepareFetchedArtifact(fetched, targetDir)
+	if err != nil {
+		return preparedArtifact{}, err
+	}
+
+	expectedReference := mustParseReference(selected.Reference).Canonical()
+	if artifact.Resolved.Reference != expectedReference {
+		return preparedArtifact{}, fmt.Errorf("fetched artifact %q does not match expected selected package %q reference %q", artifact.Resolved.Reference, selected.Name, expectedReference)
+	}
+	if artifact.Resolved.Digest != selected.Digest {
+		return preparedArtifact{}, fmt.Errorf("fetched artifact digest %q does not match expected selected package %q digest %q", artifact.Resolved.Digest, selected.Name, selected.Digest)
+	}
+	if artifact.Resolved.Name != selected.Name {
+		return preparedArtifact{}, fmt.Errorf("fetched artifact name %q does not match expected selected package %q", artifact.Resolved.Name, selected.Name)
+	}
+	if artifact.Resolved.Version != selected.Version {
+		return preparedArtifact{}, fmt.Errorf("fetched artifact version %q does not match expected selected package %q version %q", artifact.Resolved.Version, selected.Name, selected.Version)
+	}
+
+	return artifact, nil
 }
 
 func cleanupPrepared(prepared []PreparedSkill) {

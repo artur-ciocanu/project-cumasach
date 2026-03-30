@@ -21,7 +21,7 @@ This repository now contains:
 
 - the v1 specification draft
 - JSON Schemas and examples
-- a Go reference CLI slice for `package`, `push`, and dependency-aware `install`
+- a Go reference CLI slice for `package`, `push`, `lock`, and dependency-aware `install`, including `install --lockfile`
 
 ## Repository Layout
 
@@ -71,12 +71,13 @@ The implemented vertical slice is:
 
 - `cumasach package <skill-dir>`
 - `cumasach push <package.tgz> <oci-repo> [--tag <tag>]`
-- `cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>]`
+- `cumasach lock <artifact-ref|package-name> [--from <oci-base>] [--output <file>]`
+- `cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>] [--lockfile <file>]`
+- `cumasach install --lockfile <file> --target <skills-dir>`
 
 Current limitations:
 
-- `install --lockfile` is still deferred
-- `lock`, rollback, and verify are specified but not implemented yet
+- rollback and verify are specified but not implemented yet
 - dependency resolution currently covers required dependencies only
 
 ## Quick Start
@@ -178,6 +179,29 @@ On success the target contains one flat directory per active skill plus install 
   workspace-summary/
   .cumasach/install-state.json
 ```
+
+### Lockfile Workflow
+
+You can also freeze the resolved graph and install it later without live re-resolution:
+
+```bash
+cd implementation/go
+mise exec -- go run ./cmd/cumasach lock workspace-summary --from registry.example.com/agentskills --output ./skill.lock.json
+mise exec -- go run ./cmd/cumasach install --lockfile ./skill.lock.json --target /tmp/cumasach-skills-locked
+```
+
+Mixed form is also supported for explicit root validation:
+
+```bash
+cd implementation/go
+mise exec -- go run ./cmd/cumasach install workspace-summary --from registry.example.com/agentskills --lockfile ./skill.lock.json --target /tmp/cumasach-skills-locked
+```
+
+In lockfile mode:
+
+- the requested root, if provided, must match the lockfile root
+- `--from` is only used for package-name root validation and does not affect fetch selection
+- installs fetch exactly the digest-pinned artifacts recorded in the lockfile
 
 ## Non-Goals
 
