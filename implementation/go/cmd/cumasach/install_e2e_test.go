@@ -118,6 +118,74 @@ func TestInstallCommandEndToEndFailsWhenDependencyOnlyHasNonSemverTags(t *testin
 	}
 }
 
+func TestInstallLockfileEndToEnd(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	restoreInstall := swapInstallRegistry(t, registry)
+	restorePush := swapPushRegistry(t, registry)
+	restoreLock := swapLockRegistry(t, registry)
+	defer restoreInstall()
+	defer restorePush()
+	defer restoreLock()
+
+	childDir := buildDemoSkillDir(t, "workspace-notes", "1.0.0", nil)
+	rootDir := buildDemoSkillDir(t, "workspace-summary", "1.0.0", []manifestpkg.Dependency{
+		{Name: "workspace-notes", Version: "^1.0.0"},
+	})
+
+	childPackage := packageSkillWithCLI(t, childDir)
+	rootPackage := packageSkillWithCLI(t, rootDir)
+	pushSkillWithCLI(t, childPackage, "registry.example.com/agentskills/workspace-notes")
+	pushSkillWithCLI(t, rootPackage, "registry.example.com/agentskills/workspace-summary")
+
+	lockfilePath := filepath.Join(t.TempDir(), "skill.lock.json")
+	lockStdout := runRootCommand(t,
+		"lock",
+		"workspace-summary",
+		"--from", "registry.example.com/agentskills",
+		"--output", lockfilePath,
+	)
+	if !strings.Contains(lockStdout, "locked workspace-summary") {
+		t.Fatalf("lock stdout = %q, want lock summary", lockStdout)
+	}
+
+	lockTarget := t.TempDir()
+	installStdout := runRootCommand(t,
+		"install",
+		"--lockfile", lockfilePath,
+		"--target", lockTarget,
+	)
+	if !strings.Contains(installStdout, "installed workspace-summary 1.0.0") {
+		t.Fatalf("lockfile install stdout = %q, want install summary", installStdout)
+	}
+
+	liveTarget := t.TempDir()
+	runRootCommand(t,
+		"install",
+		"workspace-summary",
+		"--from", "registry.example.com/agentskills",
+		"--target", liveTarget,
+	)
+
+	if got, want := listDirNames(t, lockTarget), []string{".cumasach", "workspace-notes", "workspace-summary"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("lock target entries = %v, want %v", got, want)
+	}
+
+	lockState, err := installpkg.LoadState(lockTarget)
+	if err != nil {
+		t.Fatalf("LoadState(lockTarget) error = %v", err)
+	}
+	liveState, err := installpkg.LoadState(liveTarget)
+	if err != nil {
+		t.Fatalf("LoadState(liveTarget) error = %v", err)
+	}
+	if len(lockState.History) != 1 || len(lockState.History[0].Resolved) != len(lockState.Active) {
+		t.Fatalf("lockfile state history = %#v, want one snapshot matching active", lockState.History)
+	}
+	if normalizeResolved(lockState.Active) != normalizeResolved(liveState.Active) {
+		t.Fatalf("lockfile active = %v, want live active %v", normalizeResolved(lockState.Active), normalizeResolved(liveState.Active))
+	}
+}
+
 func packageSkillWithCLI(t *testing.T, skillDir string) string {
 	t.Helper()
 
@@ -209,4 +277,13 @@ func listDirNames(t *testing.T, root string) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func normalizeResolved(skills []installpkg.ResolvedSkill) string {
+	parts := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		parts = append(parts, skill.Name+"@"+skill.Reference)
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
 }

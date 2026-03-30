@@ -337,6 +337,9 @@ func writeLockfileForRoot(t *testing.T, registry oci.Registry, reference string)
 	t.Helper()
 
 	outputPath := filepath.Join(t.TempDir(), "skill.lock.json")
+	restore := swapLockRegistry(t, registry)
+	defer restore()
+
 	cmd := newRootCmd()
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
