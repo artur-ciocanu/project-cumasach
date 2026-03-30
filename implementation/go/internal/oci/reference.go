@@ -56,9 +56,6 @@ func RepositoryParent(rawRef string) (string, error) {
 		return "", fmt.Errorf("derive dependency base from %q: ambiguous repository parent", rawRef)
 	}
 	parent := ref.Repository[:lastSlash]
-	if !strings.Contains(parent, "/") {
-		return "", fmt.Errorf("derive dependency base from %q: ambiguous repository parent", rawRef)
-	}
 	return parent, nil
 }
 

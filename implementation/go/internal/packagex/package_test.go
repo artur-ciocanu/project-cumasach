@@ -35,9 +35,10 @@ func TestBuildTGZWritesArchiveWithGeneratedFilesSHA256(t *testing.T) {
 	}
 }
 
-func TestBuildTGZOmitsFilesSHA256WhenDisabled(t *testing.T) {
+func TestBuildTGZPreservesExistingFilesSHA256WhenDisabled(t *testing.T) {
 	sourceDir := copySkillFixture(t, "list-directory")
-	if err := os.WriteFile(filepath.Join(sourceDir, ".skill", "files.sha256"), []byte("stale\n"), 0o644); err != nil {
+	checksumPath := filepath.Join(sourceDir, ".skill", "files.sha256")
+	if err := os.WriteFile(checksumPath, []byte("stale\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(files.sha256) error = %v", err)
 	}
 
@@ -47,8 +48,12 @@ func TestBuildTGZOmitsFilesSHA256WhenDisabled(t *testing.T) {
 	}
 
 	entries := readArchiveEntries(t, archive.Bytes())
-	if _, ok := entries["list-directory/.skill/files.sha256"]; ok {
-		t.Fatal("BuildTGZ() archive unexpectedly contains .skill/files.sha256")
+	checksumBody, ok := entries["list-directory/.skill/files.sha256"]
+	if !ok {
+		t.Fatal("BuildTGZ() archive missing existing .skill/files.sha256")
+	}
+	if got, want := string(checksumBody), "stale\n"; got != want {
+		t.Fatalf(".skill/files.sha256 = %q, want %q", got, want)
 	}
 }
 

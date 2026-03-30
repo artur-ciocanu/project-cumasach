@@ -113,10 +113,6 @@ func copyTree(sourceDir, destDir string) error {
 			return fmt.Errorf("unsupported filesystem entry %q", currentPath)
 		}
 
-		if relPath == filepath.Join(".skill", "files.sha256") {
-			return nil
-		}
-
 		data, err := os.ReadFile(currentPath)
 		if err != nil {
 			return fmt.Errorf("read %q: %w", currentPath, err)

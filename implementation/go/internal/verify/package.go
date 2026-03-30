@@ -134,7 +134,7 @@ func validateChecksumPath(relPath string) error {
 
 	for _, component := range strings.Split(relPath, "/") {
 		if component == "" || component == "." {
-			continue
+			return fmt.Errorf("invalid checksum path %q: ambiguous path encoding is not allowed", relPath)
 		}
 		if component == ".." {
 			return fmt.Errorf("invalid checksum path %q: path traversal is not allowed", relPath)

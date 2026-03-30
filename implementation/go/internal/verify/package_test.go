@@ -110,6 +110,23 @@ func TestVerifyPackage(t *testing.T) {
 		}
 	})
 
+	t.Run("ambiguous checksum paths fail", func(t *testing.T) {
+		sourceDir := copySkillFixture(t, "list-directory")
+		manifestBytes := mustReadFile(t, filepath.Join(sourceDir, ".skill", "manifest.json"))
+		writeChecksumFile(t, sourceDir, []string{
+			hashLine(t, manifestBytes, "./.skill/manifest.json"),
+		})
+		archivePath := writeArchiveFromDir(t, sourceDir)
+
+		_, err := VerifyPackage(archivePath)
+		if err == nil {
+			t.Fatal("VerifyPackage() error = nil, want ambiguous checksum path failure")
+		}
+		if !strings.Contains(err.Error(), "ambiguous") {
+			t.Fatalf("VerifyPackage() error = %q, want ambiguous checksum path failure", err)
+		}
+	})
+
 	t.Run("package without files sha256 still succeeds", func(t *testing.T) {
 		sourceDir := copySkillFixture(t, "list-directory")
 		archivePath := buildPackageArchive(t, sourceDir, false)

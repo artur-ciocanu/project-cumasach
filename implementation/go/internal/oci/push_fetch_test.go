@@ -145,17 +145,17 @@ func TestRepositoryParentFromExactReference(t *testing.T) {
 	}
 }
 
-func TestRepositoryParentRejectsAmbiguousExactReference(t *testing.T) {
+func TestRepositoryParentAcceptsSingleSegmentRepositoryPath(t *testing.T) {
 	t.Parallel()
 
 	ref := "oci://registry.example.com/python-development@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
-	_, err := RepositoryParent(ref)
-	if err == nil {
-		t.Fatal("RepositoryParent() error = nil, want error")
+	base, err := RepositoryParent(ref)
+	if err != nil {
+		t.Fatalf("RepositoryParent() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), "ambiguous") {
-		t.Fatalf("RepositoryParent() error = %q, want ambiguous failure", err)
+	if got, want := base, "registry.example.com"; got != want {
+		t.Fatalf("RepositoryParent() = %q, want %q", got, want)
 	}
 }
 

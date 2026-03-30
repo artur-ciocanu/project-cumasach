@@ -90,6 +90,17 @@ func TestValidateChecksumPathRejectsBackslashes(t *testing.T) {
 	}
 }
 
+func TestValidateChecksumPathRejectsAmbiguousEncoding(t *testing.T) {
+	err := validateChecksumPath("./references/usage.md")
+	if err == nil {
+		t.Fatal("validateChecksumPath() error = nil, want ambiguous path rejection")
+	}
+
+	if !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("validateChecksumPath() error = %q, want ambiguous path context", err)
+	}
+}
+
 func hashLine(t *testing.T, body []byte, relPath string) string {
 	t.Helper()
 
