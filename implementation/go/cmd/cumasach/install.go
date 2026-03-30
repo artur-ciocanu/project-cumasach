@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	installpkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/install"
+	lockfilepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/lockfile"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/resolve"
 	"github.com/spf13/cobra"
@@ -32,25 +33,39 @@ func newInstallCmd() *cobra.Command {
 				return fmt.Errorf("--target is required")
 			}
 			if len(args) == 0 {
-				if lockfile != "" {
-					return fmt.Errorf("--lockfile is not implemented in this slice")
+				if lockfile == "" {
+					return fmt.Errorf("artifact reference is required")
 				}
-				return fmt.Errorf("artifact reference is required")
-			}
-			if lockfile != "" {
-				return fmt.Errorf("--lockfile is not implemented in this slice")
 			}
 
 			registry := newInstallRegistry()
-			root, err := parseInstallRoot(args[0], from)
-			if err != nil {
-				return err
+			var graph resolve.Graph
+			if lockfile != "" {
+				file, err := lockfilepkg.Load(lockfile)
+				if err != nil {
+					return err
+				}
+				if len(args) > 0 {
+					if err := lockfilepkg.MatchRootInput(file, args[0], from); err != nil {
+						return err
+					}
+				}
+				graph, err = lockfilepkg.ToGraph(file)
+				if err != nil {
+					return err
+				}
+			} else {
+				root, err := parseInstallRoot(args[0], from)
+				if err != nil {
+					return err
+				}
+
+				graph, err = resolve.ResolveGraph(cmd.Context(), registry, root)
+				if err != nil {
+					return err
+				}
 			}
 
-			graph, err := resolve.ResolveGraph(cmd.Context(), registry, root)
-			if err != nil {
-				return err
-			}
 			state, err := installpkg.Install(cmd.Context(), installpkg.Options{
 				Registry:  registry,
 				Graph:     &graph,

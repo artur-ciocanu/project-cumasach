@@ -56,11 +56,6 @@ func TestInstallCommandRejectsUnsupportedFlags(t *testing.T) {
 		args []string
 		want string
 	}{
-		{
-			name: "lockfile",
-			args: []string{"install", "oci://registry.example.com/agentskills/list-directory@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "--target", t.TempDir(), "--lockfile", "skill.lock.json"},
-			want: "--lockfile is not implemented",
-		},
 	}
 
 	for _, tt := range tests {
@@ -196,24 +191,124 @@ func TestInstallCommandRejectsMalformedArtifactReference(t *testing.T) {
 	}
 }
 
-func TestInstallCommandRejectsLockfileOnlyMode(t *testing.T) {
-	cmd := newRootCmd()
-	var stdout bytes.Buffer
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&stdout)
-	cmd.SetArgs([]string{
-		"install",
-		"--target", t.TempDir(),
-		"--lockfile", "skill.lock.json",
+func TestInstallCommandLockfileMode(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	restore := swapInstallRegistry(t, registry)
+	restoreLock := swapLockRegistry(t, registry)
+	defer restore()
+	defer restoreLock()
+
+	pushCommandSkill(t, registry, "child", "1.0.0", nil)
+	rootRef := pushCommandSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+	lockfilePath := writeLockfileForRoot(t, registry, rootRef)
+
+	t.Run("lockfile only uses lockfile root", func(t *testing.T) {
+		targetDir := t.TempDir()
+		cmd := newRootCmd()
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stdout)
+		cmd.SetArgs([]string{
+			"install",
+			"--lockfile", lockfilePath,
+			"--target", targetDir,
+		})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+		for _, name := range []string{"root", "child"} {
+			if _, err := os.Stat(filepath.Join(targetDir, name, "SKILL.md")); err != nil {
+				t.Fatalf("Stat(%s/SKILL.md) error = %v", name, err)
+			}
+		}
 	})
 
-	err := cmd.Execute()
-	if err == nil {
-		t.Fatal("Execute() error = nil, want failure")
-	}
-	if !strings.Contains(err.Error(), "--lockfile is not implemented") {
-		t.Fatalf("Execute() error = %q, want lockfile-only not implemented failure", err)
-	}
+	t.Run("package name mixed form requires from and matching root name", func(t *testing.T) {
+		cmd := newRootCmd()
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stdout)
+		cmd.SetArgs([]string{
+			"install",
+			"root",
+			"--lockfile", lockfilePath,
+			"--target", t.TempDir(),
+		})
+
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("Execute() error = nil, want missing --from failure")
+		}
+		if !strings.Contains(err.Error(), "--from is required") {
+			t.Fatalf("Execute() error = %q, want missing --from context", err)
+		}
+	})
+
+	t.Run("package name mixed form rejects root mismatch", func(t *testing.T) {
+		cmd := newRootCmd()
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stdout)
+		cmd.SetArgs([]string{
+			"install",
+			"other",
+			"--from", "registry.example.com/agentskills",
+			"--lockfile", lockfilePath,
+			"--target", t.TempDir(),
+		})
+
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("Execute() error = nil, want root mismatch failure")
+		}
+		if !strings.Contains(err.Error(), "does not match lockfile root") {
+			t.Fatalf("Execute() error = %q, want root mismatch context", err)
+		}
+	})
+
+	t.Run("artifact reference mixed form rejects canonical root mismatch", func(t *testing.T) {
+		cmd := newRootCmd()
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stdout)
+		cmd.SetArgs([]string{
+			"install",
+			"oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			"--lockfile", lockfilePath,
+			"--target", t.TempDir(),
+		})
+
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("Execute() error = nil, want canonical root mismatch failure")
+		}
+		if !strings.Contains(err.Error(), "does not match lockfile root") {
+			t.Fatalf("Execute() error = %q, want root mismatch context", err)
+		}
+	})
+
+	t.Run("from is ignored for fetch selection once root matches", func(t *testing.T) {
+		targetDir := t.TempDir()
+		cmd := newRootCmd()
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stdout)
+		cmd.SetArgs([]string{
+			"install",
+			"root",
+			"--from", "registry.invalid/unused",
+			"--lockfile", lockfilePath,
+			"--target", targetDir,
+		})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(targetDir, "root", "SKILL.md")); err != nil {
+			t.Fatalf("Stat(root/SKILL.md) error = %v", err)
+		}
+	})
 }
 
 func pushFixtureArtifact(t *testing.T, registry oci.Registry) string {
@@ -236,6 +331,26 @@ func pushCommandSkill(t *testing.T, registry oci.Registry, name, version string,
 		t.Fatalf("pushPackage() error = %v", err)
 	}
 	return ref
+}
+
+func writeLockfileForRoot(t *testing.T, registry oci.Registry, reference string) string {
+	t.Helper()
+
+	outputPath := filepath.Join(t.TempDir(), "skill.lock.json")
+	cmd := newRootCmd()
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stdout)
+	cmd.SetArgs([]string{
+		"lock",
+		reference,
+		"--output", outputPath,
+	})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute(lock) error = %v", err)
+	}
+	return outputPath
 }
 
 func buildNamedPackage(t *testing.T, name, version string, dependencies []manifestpkg.Dependency) string {

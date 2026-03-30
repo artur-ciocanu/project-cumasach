@@ -27,6 +27,10 @@ func LoadFile(path string) (File, error) {
 	return lockfile, nil
 }
 
+func Load(path string) (File, error) {
+	return LoadFile(path)
+}
+
 func LoadReader(r io.Reader) (File, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -81,6 +85,30 @@ func ToGraph(lockfile File) (resolve.Graph, error) {
 	}, nil
 }
 
+func MatchRootInput(lockfile File, rawInput string, from string) error {
+	rawInput = strings.TrimSpace(rawInput)
+	if rawInput == "" {
+		return nil
+	}
+
+	if ref, err := oci.ParseReference(rawInput); err == nil {
+		if ref.Canonical() != lockfile.Root.Reference {
+			return fmt.Errorf("requested artifact reference %q does not match lockfile root %q", ref.Canonical(), lockfile.Root.Reference)
+		}
+		return nil
+	} else if looksLikeArtifactReference(rawInput) {
+		return err
+	}
+
+	if strings.TrimSpace(from) == "" {
+		return fmt.Errorf("--from is required when installing by package name")
+	}
+	if rawInput != lockfile.Root.Name {
+		return fmt.Errorf("requested package name %q does not match lockfile root %q", rawInput, lockfile.Root.Name)
+	}
+	return nil
+}
+
 func validateSemantics(lockfile File) error {
 	packagesByName := make(map[string]Package, len(lockfile.Packages))
 	for _, pkg := range lockfile.Packages {
@@ -126,6 +154,15 @@ func validateSemantics(lockfile File) error {
 	}
 
 	return nil
+}
+
+func looksLikeArtifactReference(value string) bool {
+	for _, r := range value {
+		if r == '/' || r == '@' || r == ':' {
+			return true
+		}
+	}
+	return false
 }
 
 func validatePackageReference(pkg Package) error {

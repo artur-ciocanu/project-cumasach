@@ -392,6 +392,43 @@ func TestToGraph(t *testing.T) {
 	}
 }
 
+func TestMatchRootInput(t *testing.T) {
+	lock := validMinimalLockfile()
+
+	tests := []struct {
+		name    string
+		input   string
+		from    string
+		wantErr string
+	}{
+		{name: "empty input", input: "", from: "", wantErr: ""},
+		{name: "matching canonical ref", input: lock.Root.Reference, wantErr: ""},
+		{name: "matching package name", input: lock.Root.Name, from: "registry.example.com/agentskills", wantErr: ""},
+		{name: "named root missing from", input: lock.Root.Name, wantErr: "--from is required"},
+		{name: "named root mismatch", input: "other-skill", from: "registry.example.com/agentskills", wantErr: "does not match lockfile root"},
+		{name: "ref mismatch", input: "oci://registry.example.com/agentskills/root-skill@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", wantErr: "does not match lockfile root"},
+		{name: "malformed ref", input: "oci://registry.example.com/agentskills/root-skill@sha256:short", wantErr: "invalid checksum digest length"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := MatchRootInput(lock, tc.input, tc.from)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("MatchRootInput() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("MatchRootInput() error = nil, want %q", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("MatchRootInput() error = %q, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func validMinimalLockfile() File {
 	return File{
 		SchemaVersion: "v1",
