@@ -6,10 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newVerifyCmd() *cobra.Command {
-	return newNotImplementedCmd("verify", "Verify a skill package or installed skill")
-}
-
 func newNotImplementedCmd(use, short string) *cobra.Command {
 	return &cobra.Command{
 		Use:   use,

@@ -75,10 +75,10 @@ The implemented vertical slice is:
 - `cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>] [--lockfile <file>]`
 - `cumasach install --lockfile <file> --target <skills-dir>`
 - `cumasach rollback --target <skills-dir>`
+- `cumasach verify <package.tgz|artifact-ref>`
 
 Current limitations:
 
-- verify is specified but not implemented yet
 - dependency resolution currently covers required dependencies only
 
 ## Quick Start

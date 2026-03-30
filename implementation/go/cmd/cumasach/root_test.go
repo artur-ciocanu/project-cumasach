@@ -33,24 +33,3 @@ func TestRootHelp(t *testing.T) {
 		}
 	}
 }
-
-func TestRootHelpCommandStubsReturnNotImplemented(t *testing.T) {
-	for _, commandName := range []string{"verify"} {
-		t.Run(commandName, func(t *testing.T) {
-			cmd := newRootCmd()
-			var stdout bytes.Buffer
-
-			cmd.SetOut(&stdout)
-			cmd.SetErr(&stdout)
-			cmd.SetArgs([]string{commandName})
-
-			err := cmd.Execute()
-			if err == nil {
-				t.Fatal("Execute() error = nil, want failure")
-			}
-			if !strings.Contains(err.Error(), "not implemented in this slice") {
-				t.Fatalf("Execute() error = %q, want not implemented failure", err)
-			}
-		})
-	}
-}
