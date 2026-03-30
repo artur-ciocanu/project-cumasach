@@ -1,11 +1,13 @@
 package oci
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/v2"
+	"oras.land/oras-go/v2/content"
 )
 
 type manifestRecorder interface {
@@ -28,8 +30,11 @@ func Push(ctx context.Context, registry Registry, repository string, manifestJSO
 		return Reference{}, fmt.Errorf("push OCI config blob: %w", err)
 	}
 
-	layerDesc, err := oras.PushBytes(ctx, target, ContentLayerMediaType, archive)
-	if err != nil {
+	layerDesc := content.NewDescriptorFromBytes(ContentLayerMediaType, archive)
+	layerDesc.Annotations = map[string]string{
+		ocispec.AnnotationTitle: "package.tgz",
+	}
+	if err := target.Push(ctx, layerDesc, bytes.NewReader(archive)); err != nil {
 		return Reference{}, fmt.Errorf("push OCI content layer: %w", err)
 	}
 

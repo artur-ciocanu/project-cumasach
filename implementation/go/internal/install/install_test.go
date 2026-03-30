@@ -747,6 +747,65 @@ func TestRollback(t *testing.T) {
 		}
 	})
 
+	t.Run("fails when install-state history is not ordered oldest to newest", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		statePath := StatePath(targetDir)
+		if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+			t.Fatalf("MkdirAll(state dir) error = %v", err)
+		}
+		raw := `{
+  "schemaVersion": "v1",
+  "target": {"path": "` + targetDir + `"},
+  "active": [
+    {
+      "name": "root",
+      "version": "1.0.0",
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "reference": "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "history": [
+    {
+      "timestamp": "2026-03-30T16:00:00Z",
+      "action": "install",
+      "resolved": [
+        {
+          "name": "root",
+          "version": "2.0.0",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "reference": "oci://registry.example.com/agentskills/root@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ]
+    },
+    {
+      "timestamp": "2026-03-30T15:00:00Z",
+      "action": "rollback",
+      "resolved": [
+        {
+          "name": "root",
+          "version": "1.0.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "reference": "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ]
+}`
+		if err := os.WriteFile(statePath, []byte(raw), 0o644); err != nil {
+			t.Fatalf("WriteFile(bad state) error = %v", err)
+		}
+
+		_, err := Rollback(context.Background(), Options{Registry: registry, TargetDir: targetDir})
+		if err == nil {
+			t.Fatal("Rollback() error = nil, want out-of-order history failure")
+		}
+		if !strings.Contains(err.Error(), "history timestamps are not ordered oldest to newest") {
+			t.Fatalf("Rollback() error = %q, want ordering validation context", err)
+		}
+	})
+
 	t.Run("restores the pre-rollback active view when state writing fails", func(t *testing.T) {
 		registry := oci.NewMemoryRegistry()
 		targetDir := t.TempDir()
