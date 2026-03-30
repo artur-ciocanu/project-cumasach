@@ -21,7 +21,7 @@ This repository now contains:
 
 - the v1 specification draft
 - JSON Schemas and examples
-- a Go reference CLI slice for `package`, `push`, `lock`, and dependency-aware `install`, including `install --lockfile`
+- a Go reference CLI slice for `package`, `push`, `install`, `lock`, `rollback`, and `verify`, including `install --lockfile`
 
 ## Repository Layout
 
@@ -159,8 +159,10 @@ Package and push the tiny dependency demo:
 
 ```bash
 cd implementation/go
+mise exec -- go run ./cmd/cumasach package ../../examples/list-directory --files-sha256
 mise exec -- go run ./cmd/cumasach package ../../examples/workspace-notes --files-sha256
 mise exec -- go run ./cmd/cumasach package ../../examples/workspace-summary --files-sha256
+mise exec -- go run ./cmd/cumasach push ./dist/list-directory-1.2.3.tgz registry.example.com/agentskills/list-directory
 mise exec -- go run ./cmd/cumasach push ./dist/workspace-notes-1.0.0.tgz registry.example.com/agentskills/workspace-notes
 mise exec -- go run ./cmd/cumasach push ./dist/workspace-summary-1.0.0.tgz registry.example.com/agentskills/workspace-summary
 ```
@@ -176,6 +178,7 @@ On success the target contains one flat directory per active skill plus install 
 
 ```text
 /tmp/cumasach-skills-deps/
+  list-directory/
   workspace-notes/
   workspace-summary/
   .cumasach/install-state.json
