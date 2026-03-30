@@ -342,6 +342,56 @@ func TestFromGraphRejectsSchemaInvalidLockfile(t *testing.T) {
 	}
 }
 
+func TestToGraph(t *testing.T) {
+	lock := File{
+		SchemaVersion: "v1",
+		Root: Root{
+			Name:      "root-skill",
+			Version:   "1.2.3",
+			Reference: "oci://registry.example.com/agentskills/root-skill@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		Packages: []Package{
+			{
+				Name:      "child-skill",
+				Version:   "2.0.0",
+				Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				Reference: "oci://registry.example.com/agentskills/child-skill@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			},
+			{
+				Name:      "root-skill",
+				Version:   "1.2.3",
+				Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Reference: "oci://registry.example.com/agentskills/root-skill@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			},
+		},
+		Edges: []Edge{{From: "root-skill", To: "child-skill"}},
+	}
+
+	graph, err := ToGraph(lock)
+	if err != nil {
+		t.Fatalf("ToGraph() error = %v", err)
+	}
+
+	if graph.Root != "root-skill" {
+		t.Fatalf("graph.Root = %q, want %q", graph.Root, "root-skill")
+	}
+	if len(graph.Packages) != 2 {
+		t.Fatalf("len(graph.Packages) = %d, want 2", len(graph.Packages))
+	}
+	if got := graph.Packages["root-skill"]; got.Name != "root-skill" || got.Version != "1.2.3" || got.Reference != lock.Root.Reference || got.Digest != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("graph.Packages[root-skill] = %+v, want preserved lockfile metadata", got)
+	}
+	if got := graph.Packages["child-skill"]; got.Name != "child-skill" || got.Version != "2.0.0" || got.Reference != "oci://registry.example.com/agentskills/child-skill@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" || got.Digest != "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
+		t.Fatalf("graph.Packages[child-skill] = %+v, want preserved lockfile metadata", got)
+	}
+	if len(graph.Edges["root-skill"]) != 1 || graph.Edges["root-skill"][0] != "child-skill" {
+		t.Fatalf("graph.Edges[root-skill] = %#v, want child-skill edge", graph.Edges["root-skill"])
+	}
+	if deps := graph.Edges["child-skill"]; deps != nil {
+		t.Fatalf("graph.Edges[child-skill] = %#v, want nil", deps)
+	}
+}
+
 func validMinimalLockfile() File {
 	return File{
 		SchemaVersion: "v1",

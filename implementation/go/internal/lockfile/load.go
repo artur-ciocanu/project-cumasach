@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
+	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/resolve"
 	"oras.land/oras-go/v2/registry/remote"
 )
 
@@ -46,6 +47,38 @@ func LoadReader(r io.Reader) (File, error) {
 	}
 
 	return lockfile, nil
+}
+
+func ToGraph(lockfile File) (resolve.Graph, error) {
+	if err := validateFile(lockfile); err != nil {
+		return resolve.Graph{}, err
+	}
+
+	packages := make(map[string]resolve.SelectedPackage, len(lockfile.Packages))
+	edges := make(map[string][]string, len(lockfile.Packages))
+	for _, pkg := range lockfile.Packages {
+		ref, err := validateReference(pkg.Reference)
+		if err != nil {
+			return resolve.Graph{}, fmt.Errorf("convert lockfile package %q: %w", pkg.Name, err)
+		}
+		packages[pkg.Name] = resolve.SelectedPackage{
+			Name:       pkg.Name,
+			Version:    pkg.Version,
+			Reference:  ref.Canonical(),
+			Digest:     pkg.Digest,
+			Repository: ref.Repository,
+		}
+		edges[pkg.Name] = nil
+	}
+	for _, edge := range lockfile.Edges {
+		edges[edge.From] = append(edges[edge.From], edge.To)
+	}
+
+	return resolve.Graph{
+		Root:     lockfile.Root.Name,
+		Packages: packages,
+		Edges:    edges,
+	}, nil
 }
 
 func validateSemantics(lockfile File) error {

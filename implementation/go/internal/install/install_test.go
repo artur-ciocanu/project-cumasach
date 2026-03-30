@@ -13,6 +13,7 @@ import (
 	"time"
 
 	archivepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/archive"
+	lockfilepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/lockfile"
 	manifestpkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/manifest"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/packagex"
@@ -468,6 +469,113 @@ func TestRestoreOnStateWriteFailure(t *testing.T) {
 	if got := activeSkillVersion(t, afterState.Active, "child"); got != "1.0.0" {
 		t.Fatalf("active child version after rollback = %q, want %q", got, "1.0.0")
 	}
+}
+
+func TestInstallFromLockfile(t *testing.T) {
+	t.Run("activates lockfile graph and preserves unrelated active skills", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		unrelatedRef := pushSkill(t, registry, namedSkillDir(t, "notes", "0.1.0", "# notes\n", nil), "registry.example.com/agentskills/notes")
+		if _, err := Install(context.Background(), Options{
+			Registry:  registry,
+			Reference: unrelatedRef,
+			TargetDir: targetDir,
+		}); err != nil {
+			t.Fatalf("Install(unrelated) error = %v", err)
+		}
+
+		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
+		liveGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		lock, err := lockfilepkg.FromGraph(liveGraph)
+		if err != nil {
+			t.Fatalf("FromGraph() error = %v", err)
+		}
+		graph, err := lockfilepkg.ToGraph(lock)
+		if err != nil {
+			t.Fatalf("ToGraph() error = %v", err)
+		}
+
+		state, err := Install(context.Background(), Options{
+			Registry:  registry,
+			Graph:     &graph,
+			TargetDir: targetDir,
+		})
+		if err != nil {
+			t.Fatalf("Install(lockfile graph) error = %v", err)
+		}
+
+		for _, name := range []string{"notes", "root", "child"} {
+			if _, err := os.Stat(filepath.Join(targetDir, name, "SKILL.md")); err != nil {
+				t.Fatalf("Stat(%s/SKILL.md) error = %v", name, err)
+			}
+		}
+		if len(state.Active) != 3 {
+			t.Fatalf("len(state.Active) = %d, want 3", len(state.Active))
+		}
+		if !equalResolvedSets(state.Active, state.History[len(state.History)-1].Resolved) {
+			t.Fatalf("newest history = %#v, want active %#v", state.History[len(state.History)-1].Resolved, state.Active)
+		}
+	})
+
+	t.Run("fetched artifact version mismatch against lockfile metadata fails", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
+		liveGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		lock, err := lockfilepkg.FromGraph(liveGraph)
+		if err != nil {
+			t.Fatalf("FromGraph() error = %v", err)
+		}
+		for i := range lock.Packages {
+			if lock.Packages[i].Name == "child" {
+				lock.Packages[i].Version = "9.9.9"
+			}
+		}
+		graph, err := lockfilepkg.ToGraph(lock)
+		if err != nil {
+			t.Fatalf("ToGraph() error = %v", err)
+		}
+
+		_, err = Install(context.Background(), Options{Registry: registry, Graph: &graph, TargetDir: targetDir})
+		if err == nil {
+			t.Fatal("Install(lockfile graph) error = nil, want version mismatch failure")
+		}
+		if !strings.Contains(err.Error(), "does not match expected selected package") {
+			t.Fatalf("Install(lockfile graph) error = %q, want selected package mismatch context", err)
+		}
+	})
+
+	t.Run("fetched artifact digest mismatch against lockfile metadata fails", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
+		liveGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		lock, err := lockfilepkg.FromGraph(liveGraph)
+		if err != nil {
+			t.Fatalf("FromGraph() error = %v", err)
+		}
+		graph, err := lockfilepkg.ToGraph(lock)
+		if err != nil {
+			t.Fatalf("ToGraph() error = %v", err)
+		}
+		selected := graph.Packages["child"]
+		selected.Digest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+		graph.Packages["child"] = selected
+
+		_, err = Install(context.Background(), Options{Registry: registry, Graph: &graph, TargetDir: targetDir})
+		if err == nil {
+			t.Fatal("Install(lockfile graph) error = nil, want digest mismatch failure")
+		}
+		if !strings.Contains(err.Error(), "does not match expected selected package") && !strings.Contains(err.Error(), "digest") {
+			t.Fatalf("Install(lockfile graph) error = %q, want digest mismatch context", err)
+		}
+	})
 }
 
 func pushSkill(t *testing.T, registry *oci.MemoryRegistry, skillDir, repository string) string {
