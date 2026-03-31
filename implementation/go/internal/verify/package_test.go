@@ -162,6 +162,45 @@ func TestVerifyPackage(t *testing.T) {
 			t.Fatal("VerifiedFilesSHA256 = true, want false")
 		}
 	})
+
+	t.Run("valid package in read only directory still succeeds", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("directory permissions are not portable on Windows")
+		}
+
+		sourceDir := copySkillFixture(t, "list-directory")
+		archivePath := buildPackageArchive(t, sourceDir, true)
+
+		readonlyDir := filepath.Join(t.TempDir(), "readonly")
+		if err := os.Mkdir(readonlyDir, 0o755); err != nil {
+			t.Fatalf("Mkdir(readonlyDir) error = %v", err)
+		}
+
+		readonlyArchivePath := filepath.Join(readonlyDir, filepath.Base(archivePath))
+		body := mustReadFile(t, archivePath)
+		if err := os.WriteFile(readonlyArchivePath, body, 0o644); err != nil {
+			t.Fatalf("WriteFile(readonlyArchivePath) error = %v", err)
+		}
+		if err := os.Chmod(readonlyDir, 0o555); err != nil {
+			t.Fatalf("Chmod(readonlyDir) error = %v", err)
+		}
+		defer func() {
+			if err := os.Chmod(readonlyDir, 0o755); err != nil {
+				t.Fatalf("Chmod(readonlyDir restore) error = %v", err)
+			}
+		}()
+
+		result, err := VerifyPackage(readonlyArchivePath)
+		if err != nil {
+			t.Fatalf("VerifyPackage() error = %v", err)
+		}
+		if got := result.Name; got != "list-directory" {
+			t.Fatalf("Name = %q, want %q", got, "list-directory")
+		}
+		if !result.VerifiedFilesSHA256 {
+			t.Fatal("VerifiedFilesSHA256 = false, want true")
+		}
+	})
 }
 
 func buildPackageArchive(t *testing.T, sourceDir string, includeFilesSHA256 bool) string {

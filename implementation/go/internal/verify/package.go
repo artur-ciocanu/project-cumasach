@@ -17,7 +17,7 @@ func VerifyPackage(path string) (Result, error) {
 	}
 	defer file.Close()
 
-	return verifyPackageArchive(file, filepath.Dir(path), "")
+	return verifyPackageArchive(file, os.TempDir(), "")
 }
 
 func verifyPackageArchive(r io.Reader, parentDir, reference string) (Result, error) {
