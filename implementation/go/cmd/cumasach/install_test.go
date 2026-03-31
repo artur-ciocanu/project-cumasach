@@ -19,8 +19,8 @@ func TestInstallCommandInstallsArtifactAndDependenciesIntoTarget(t *testing.T) {
 	restore := swapInstallRegistry(t, registry)
 	defer restore()
 
-	pushCommandSkill(t, registry, "child", "1.0.0", nil)
-	ref := pushCommandSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+	pushCommandSkillToRepository(t, registry, "registry.example.com/catalog/child", "child", "1.0.0", nil)
+	ref := pushCommandSkillToRepository(t, registry, "registry.example.com/published/root-artifact", "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
 	targetDir := t.TempDir()
 
 	cmd := newRootCmd()
@@ -30,6 +30,7 @@ func TestInstallCommandInstallsArtifactAndDependenciesIntoTarget(t *testing.T) {
 	cmd.SetArgs([]string{
 		"install",
 		ref,
+		"--from", "registry.example.com/catalog",
 		"--target", targetDir,
 	})
 
@@ -50,13 +51,38 @@ func TestInstallCommandInstallsArtifactAndDependenciesIntoTarget(t *testing.T) {
 	}
 }
 
+func TestInstallCommandExactArtifactWithDependenciesRequiresFrom(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	restore := swapInstallRegistry(t, registry)
+	defer restore()
+
+	ref := pushCommandSkillToRepository(t, registry, "registry.example.com/published/root-artifact", "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+
+	cmd := newRootCmd()
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stdout)
+	cmd.SetArgs([]string{
+		"install",
+		ref,
+		"--target", t.TempDir(),
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want missing --from failure")
+	}
+	if !strings.Contains(err.Error(), "--from") {
+		t.Fatalf("Execute() error = %q, want missing --from context", err)
+	}
+}
+
 func TestInstallCommandRejectsUnsupportedFlags(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
 		want string
-	}{
-	}
+	}{}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -200,7 +226,7 @@ func TestInstallCommandLockfileMode(t *testing.T) {
 
 	pushCommandSkill(t, registry, "child", "1.0.0", nil)
 	rootRef := pushCommandSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
-	lockfilePath := writeLockfileForRoot(t, registry, rootRef)
+	lockfilePath := writeLockfileForRoot(t, registry, rootRef, "registry.example.com/agentskills")
 
 	t.Run("lockfile only uses lockfile root", func(t *testing.T) {
 		targetDir := t.TempDir()
@@ -324,16 +350,21 @@ func pushFixtureArtifact(t *testing.T, registry oci.Registry) string {
 
 func pushCommandSkill(t *testing.T, registry oci.Registry, name, version string, dependencies []manifestpkg.Dependency) string {
 	t.Helper()
+	return pushCommandSkillToRepository(t, registry, "registry.example.com/agentskills/"+name, name, version, dependencies)
+}
+
+func pushCommandSkillToRepository(t *testing.T, registry oci.Registry, repository, name, version string, dependencies []manifestpkg.Dependency) string {
+	t.Helper()
 
 	packagePath := buildNamedPackage(t, name, version, dependencies)
-	ref, err := pushPackage(context.Background(), registry, packagePath, "registry.example.com/agentskills/"+name, "")
+	ref, err := pushPackage(context.Background(), registry, packagePath, repository, "")
 	if err != nil {
 		t.Fatalf("pushPackage() error = %v", err)
 	}
 	return ref
 }
 
-func writeLockfileForRoot(t *testing.T, registry oci.Registry, reference string) string {
+func writeLockfileForRoot(t *testing.T, registry oci.Registry, reference, from string) string {
 	t.Helper()
 
 	outputPath := filepath.Join(t.TempDir(), "skill.lock.json")
@@ -344,11 +375,15 @@ func writeLockfileForRoot(t *testing.T, registry oci.Registry, reference string)
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
-	cmd.SetArgs([]string{
+	args := []string{
 		"lock",
 		reference,
 		"--output", outputPath,
-	})
+	}
+	if from != "" {
+		args = append(args, "--from", from)
+	}
+	cmd.SetArgs(args)
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute(lock) error = %v", err)

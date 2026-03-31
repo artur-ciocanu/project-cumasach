@@ -56,6 +56,29 @@ func TestVerifyPackage(t *testing.T) {
 		}
 	})
 
+	t.Run("semantically invalid manifest fails", func(t *testing.T) {
+		sourceDir := copySkillFixture(t, "list-directory")
+		if err := os.WriteFile(filepath.Join(sourceDir, ".skill", "manifest.json"), []byte(`{
+  "schemaVersion": "v1",
+  "packageType": "skill",
+  "name": "list-directory",
+  "version": "1.2.3",
+  "skill": {"entrypoint": "SKILL.md"},
+  "dependencies": [{"name": "child", "version": "1.2"}]
+}`), 0o644); err != nil {
+			t.Fatalf("WriteFile(manifest.json) error = %v", err)
+		}
+		archivePath := writeArchiveFromDir(t, sourceDir)
+
+		_, err := VerifyPackage(archivePath)
+		if err == nil {
+			t.Fatal("VerifyPackage() error = nil, want semantic validation failure")
+		}
+		if !strings.Contains(err.Error(), "constraint") {
+			t.Fatalf("VerifyPackage() error = %q, want dependency constraint failure", err)
+		}
+	})
+
 	t.Run("checksum mismatch fails", func(t *testing.T) {
 		sourceDir := copySkillFixture(t, "list-directory")
 		writeChecksumFile(t, sourceDir, []string{

@@ -218,7 +218,7 @@ func TestResolveGraph(t *testing.T) {
 			},
 		})
 
-		graph, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		graph, err := ResolveGraph(context.Background(), registry, mustExactRootWithBase(t, rootRef.Canonical(), "registry.example.com/agentskills"))
 		if err != nil {
 			t.Fatalf("ResolveGraph() error = %v", err)
 		}
@@ -236,6 +236,62 @@ func TestResolveGraph(t *testing.T) {
 		}
 	})
 
+	t.Run("exact root with dependencies requires explicit base", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		rootRef := pushGraphSkill(t, registry, "registry.example.com/published/root-artifact", manifestpkg.Manifest{
+			SchemaVersion: "v1",
+			PackageType:   "skill",
+			Name:          "root",
+			Version:       "1.0.0",
+			Skill:         manifestpkg.Skill{Entrypoint: "SKILL.md"},
+			Dependencies: []manifestpkg.Dependency{
+				{Name: "child", Version: "^1.0.0"},
+			},
+		})
+
+		_, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		if err == nil {
+			t.Fatal("ResolveGraph() error = nil, want missing dependency base failure")
+		}
+		if !strings.Contains(err.Error(), "--from") && !strings.Contains(err.Error(), "dependency base") {
+			t.Fatalf("ResolveGraph() error = %q, want dependency base context", err)
+		}
+	})
+
+	t.Run("exact root resolves dependencies from explicit base", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		pushGraphSkill(t, registry, "registry.example.com/catalog/child", manifestpkg.Manifest{
+			SchemaVersion: "v1",
+			PackageType:   "skill",
+			Name:          "child",
+			Version:       "1.0.0",
+			Skill:         manifestpkg.Skill{Entrypoint: "SKILL.md"},
+		})
+		rootRef := pushGraphSkill(t, registry, "registry.example.com/published/root-artifact", manifestpkg.Manifest{
+			SchemaVersion: "v1",
+			PackageType:   "skill",
+			Name:          "root",
+			Version:       "1.0.0",
+			Skill:         manifestpkg.Skill{Entrypoint: "SKILL.md"},
+			Dependencies: []manifestpkg.Dependency{
+				{Name: "child", Version: "^1.0.0"},
+			},
+		})
+
+		graph, err := ResolveGraph(context.Background(), registry, Root{
+			reference: rootRef.Canonical(),
+			ociBase:   "registry.example.com/catalog",
+		})
+		if err != nil {
+			t.Fatalf("ResolveGraph() error = %v", err)
+		}
+
+		assertGraphPackages(t, graph, "root", "child")
+		if got := graph.Packages["child"].Repository; got != "registry.example.com/catalog/child" {
+			t.Fatalf("child repository = %q, want %q", got, "registry.example.com/catalog/child")
+		}
+	})
+
 	t.Run("transitive dependency chain", func(t *testing.T) {
 		registry := oci.NewMemoryRegistry()
 		pushGraphSkill(t, registry, "registry.example.com/agentskills/grandchild", manifestpkg.Manifest{
@@ -250,7 +306,7 @@ func TestResolveGraph(t *testing.T) {
 			Dependencies: []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}},
 		})
 
-		graph, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		graph, err := ResolveGraph(context.Background(), registry, mustExactRootWithBase(t, rootRef.Canonical(), "registry.example.com/agentskills"))
 		if err != nil {
 			t.Fatalf("ResolveGraph() error = %v", err)
 		}
@@ -313,7 +369,7 @@ func TestResolveGraph(t *testing.T) {
 			},
 		})
 
-		graph, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		graph, err := ResolveGraph(context.Background(), registry, mustExactRootWithBase(t, rootRef.Canonical(), "registry.example.com/agentskills"))
 		if err != nil {
 			t.Fatalf("ResolveGraph() error = %v", err)
 		}
@@ -349,7 +405,7 @@ func TestResolveGraph(t *testing.T) {
 			},
 		})
 
-		graph, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		graph, err := ResolveGraph(context.Background(), registry, mustExactRootWithBase(t, rootRef.Canonical(), "registry.example.com/agentskills"))
 		if err != nil {
 			t.Fatalf("ResolveGraph() error = %v", err)
 		}
@@ -383,7 +439,7 @@ func TestResolveGraph(t *testing.T) {
 			},
 		})
 
-		_, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		_, err := ResolveGraph(context.Background(), registry, mustExactRootWithBase(t, rootRef.Canonical(), "registry.example.com/agentskills"))
 		if err == nil || !strings.Contains(err.Error(), "shared") {
 			t.Fatalf("ResolveGraph() error = %v, want incompatible shared constraint failure", err)
 		}
@@ -417,7 +473,7 @@ func TestResolveGraph(t *testing.T) {
 			},
 		})
 
-		graph, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		graph, err := ResolveGraph(context.Background(), registry, mustExactRootWithBase(t, rootRef.Canonical(), "registry.example.com/agentskills"))
 		if err != nil {
 			t.Fatalf("ResolveGraph() error = %v", err)
 		}
@@ -441,7 +497,7 @@ func TestResolveGraph(t *testing.T) {
 			Dependencies: []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}},
 		})
 
-		_, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		_, err := ResolveGraph(context.Background(), registry, mustExactRootWithBase(t, rootRef.Canonical(), "registry.example.com/agentskills"))
 		if err == nil || !strings.Contains(err.Error(), "child") {
 			t.Fatalf("ResolveGraph() error = %v, want non-semver tag resolution failure", err)
 		}
@@ -454,7 +510,7 @@ func TestResolveGraph(t *testing.T) {
 			Dependencies: []manifestpkg.Dependency{{Name: "root", Version: "^1.0.0"}},
 		})
 
-		_, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		_, err := ResolveGraph(context.Background(), registry, mustExactRootWithBase(t, rootRef.Canonical(), "registry.example.com/agentskills"))
 		if err == nil || !strings.Contains(err.Error(), "self-dependency") {
 			t.Fatalf("ResolveGraph() error = %v, want self-dependency failure", err)
 		}
@@ -479,7 +535,7 @@ func TestResolveGraph(t *testing.T) {
 			Dependencies: []manifestpkg.Dependency{{Name: "a", Version: "^1.0.0"}},
 		})
 
-		_, err := ResolveGraph(context.Background(), registry, mustExactRoot(t, rootRef.Canonical()))
+		_, err := ResolveGraph(context.Background(), registry, mustExactRootWithBase(t, rootRef.Canonical(), "registry.example.com/agentskills"))
 		if err == nil || !strings.Contains(err.Error(), "cycle") {
 			t.Fatalf("ResolveGraph() error = %v, want cycle failure", err)
 		}
@@ -512,6 +568,16 @@ func mustExactRoot(t *testing.T, reference string) Root {
 	root, err := NewExactRoot(reference)
 	if err != nil {
 		t.Fatalf("NewExactRoot() error = %v", err)
+	}
+	return root
+}
+
+func mustExactRootWithBase(t *testing.T, reference, base string) Root {
+	t.Helper()
+
+	root, err := NewExactRootWithBase(reference, base)
+	if err != nil {
+		t.Fatalf("NewExactRootWithBase() error = %v", err)
 	}
 	return root
 }

@@ -229,7 +229,8 @@ Version 1 does not define an implicit target directory.
 If the positional input is an artifact reference:
 
 - the CLI MUST install that exact root artifact
-- `--from` MUST NOT be required
+- `--from` MUST NOT be required when the exact root has no dependencies
+- if the exact root has dependencies and live dependency resolution is needed, `--from` is REQUIRED and identifies the dependency repository namespace prefix according to section 6.4
 
 If the positional input is a package name:
 
@@ -261,6 +262,7 @@ When `--lockfile` is the only input source:
 
 - `--target` is missing
 - a package name is used without `--from`
+- an artifact reference with dependencies is used without `--from`
 - the dependency graph is unsatisfied
 - a lockfile is malformed
 - a supplied lockfile and requested root identity disagree
@@ -289,6 +291,10 @@ cumasach lock <artifact-ref|package-name> [--from <oci-base>] [--output <file>]
 If the positional input is a package name, `--from` is REQUIRED.
 
 If the positional input is a package name, the CLI MUST resolve that name from the repository locator derived from `--from` according to section 6.4.
+
+If the positional input is an artifact reference, `--from` MUST NOT be required when the exact root has no dependencies.
+
+If the positional input is an artifact reference and the exact root has dependencies, `--from` is REQUIRED and identifies the dependency repository namespace prefix according to section 6.4.
 
 If `--output` is omitted, implementations SHOULD write:
 

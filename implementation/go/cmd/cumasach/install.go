@@ -100,7 +100,7 @@ func parseInstallRoot(value, from string) (resolve.Root, error) {
 
 func parseResolveRoot(value, from, verb string) (resolve.Root, error) {
 	if _, err := oci.ParseReference(value); err == nil {
-		return resolve.NewExactRoot(value)
+		return resolve.NewExactRootWithBase(value, from)
 	} else if isLikelyArtifactReference(value) {
 		return resolve.Root{}, err
 	}

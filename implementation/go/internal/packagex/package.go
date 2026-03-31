@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/archive"
+	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/filesha256"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/manifest"
 )
 
@@ -28,6 +29,9 @@ func BuildTGZ(w io.Writer, sourceDir string, options BuildOptions) error {
 	defer os.RemoveAll(filepath.Dir(stagingDir))
 
 	if !options.IncludeFilesSHA256 {
+		if _, err := filesha256.Validate(stagingDir); err != nil {
+			return fmt.Errorf("validate existing .skill/files.sha256: %w", err)
+		}
 		return archive.WriteTGZ(w, stagingDir, loaded)
 	}
 

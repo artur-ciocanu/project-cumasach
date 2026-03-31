@@ -1,8 +1,11 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,6 +122,39 @@ func TestPushCommandFailsForMissingArchive(t *testing.T) {
 	}
 }
 
+func TestPushCommandFailsForSemanticallyInvalidManifest(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	restore := swapPushRegistry(t, registry)
+	defer restore()
+
+	packagePath := buildRawPackageWithManifest(t, "list-directory", []byte(`{
+  "schemaVersion": "v1",
+  "packageType": "skill",
+  "name": "list-directory",
+  "version": "1.2.3",
+  "skill": {"entrypoint": "SKILL.md"},
+  "dependencies": [{"name": "child", "version": "1.2"}]
+}`))
+
+	cmd := newRootCmd()
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stdout)
+	cmd.SetArgs([]string{
+		"push",
+		packagePath,
+		"registry.example.com/agentskills/list-directory",
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want semantic validation failure")
+	}
+	if !strings.Contains(err.Error(), "constraint") {
+		t.Fatalf("Execute() error = %q, want dependency constraint context", err)
+	}
+}
+
 func buildFixturePackage(t *testing.T) string {
 	t.Helper()
 
@@ -156,6 +192,73 @@ func readMirroredManifestBytes(t *testing.T, packagePath string) []byte {
 	}
 
 	return manifestBytes
+}
+
+func buildRawPackageWithManifest(t *testing.T, name string, manifestBytes []byte) string {
+	t.Helper()
+
+	sourceDir := filepath.Join(t.TempDir(), name)
+	if err := os.MkdirAll(filepath.Join(sourceDir, ".skill"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(.skill) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, "SKILL.md"), []byte("# "+name+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(SKILL.md) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, ".skill", "manifest.json"), manifestBytes, 0o644); err != nil {
+		t.Fatalf("WriteFile(manifest.json) error = %v", err)
+	}
+
+	outputPath := filepath.Join(t.TempDir(), name+".tgz")
+	outputFile, err := os.Create(outputPath)
+	if err != nil {
+		t.Fatalf("Create(output) error = %v", err)
+	}
+	defer outputFile.Close()
+
+	gzipWriter := gzip.NewWriter(outputFile)
+	tarWriter := tar.NewWriter(gzipWriter)
+	if err := filepath.Walk(sourceDir, func(currentPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(filepath.Dir(sourceDir), currentPath)
+		if err != nil {
+			return err
+		}
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		header.Name = filepath.ToSlash(relPath)
+		if info.IsDir() && !strings.HasSuffix(header.Name, "/") {
+			header.Name += "/"
+		}
+		if err := tarWriter.WriteHeader(header); err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		file, err := os.Open(currentPath)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		_, err = io.Copy(tarWriter, file)
+		return err
+	}); err != nil {
+		t.Fatalf("Walk() error = %v", err)
+	}
+
+	if err := tarWriter.Close(); err != nil {
+		t.Fatalf("tarWriter.Close() error = %v", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatalf("gzipWriter.Close() error = %v", err)
+	}
+
+	return outputPath
 }
 
 func swapPushRegistry(t *testing.T, registry oci.Registry) func() {

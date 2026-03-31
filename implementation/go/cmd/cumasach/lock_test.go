@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/lockfile"
+	manifestpkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/manifest"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 )
 
@@ -37,6 +38,38 @@ func TestLockCommand(t *testing.T) {
 		}
 		if output := stdout.String(); !strings.Contains(output, "locked root to "+outputPath) {
 			t.Fatalf("stdout = %q, want success summary", output)
+		}
+	})
+
+	t.Run("lock artifact reference with dependencies uses explicit from", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		restore := swapLockRegistry(t, registry)
+		defer restore()
+
+		pushCommandSkillToRepository(t, registry, "registry.example.com/catalog/child", "child", "1.0.0", nil)
+		rootRef := pushCommandSkillToRepository(t, registry, "registry.example.com/published/root-artifact", "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+		outputPath := filepath.Join(t.TempDir(), "root.lock.json")
+
+		cmd := newRootCmd()
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stdout)
+		cmd.SetArgs([]string{"lock", rootRef, "--from", "registry.example.com/catalog", "--output", outputPath})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		loaded := loadWrittenLockfile(t, outputPath)
+		foundChild := false
+		for _, pkg := range loaded.Packages {
+			if pkg.Name == "child" {
+				foundChild = true
+				break
+			}
+		}
+		if !foundChild {
+			t.Fatalf("lockfile packages = %#v, want child dependency", loaded.Packages)
 		}
 	})
 

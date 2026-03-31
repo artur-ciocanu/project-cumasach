@@ -216,8 +216,12 @@ func equalResolvedSlices(left, right []ResolvedSkill) bool {
 	if len(left) != len(right) {
 		return false
 	}
-	for i := range left {
-		if left[i] != right[i] {
+	byName := make(map[string]ResolvedSkill, len(left))
+	for _, entry := range left {
+		byName[entry.Name] = entry
+	}
+	for _, entry := range right {
+		if got, ok := byName[entry.Name]; !ok || got != entry {
 			return false
 		}
 	}

@@ -150,7 +150,7 @@ func TestInstallRejectsMalformedExistingInstallState(t *testing.T) {
 
 	badState := State{
 		SchemaVersion: SchemaVersion,
-		Target: Target{Path: targetDir},
+		Target:        Target{Path: targetDir},
 		Active: []ResolvedSkill{
 			{
 				Name:      "list-directory",
@@ -222,6 +222,60 @@ func TestInstallRejectsMalformedExistingInstallState(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "active does not match newest history snapshot") {
 		t.Fatalf("Install() error = %q, want semantic validation context", err)
+	}
+}
+
+func TestWriteStateAcceptsEquivalentActiveAndHistorySetsInDifferentOrders(t *testing.T) {
+	targetDir := t.TempDir()
+	state := State{
+		SchemaVersion: SchemaVersion,
+		Target:        Target{Path: targetDir},
+		Active: []ResolvedSkill{
+			{
+				Name:      "root",
+				Version:   "1.0.0",
+				Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Reference: "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			},
+			{
+				Name:      "child",
+				Version:   "1.0.0",
+				Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				Reference: "oci://registry.example.com/agentskills/child@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			},
+		},
+		History: []HistoryEntry{
+			{
+				Timestamp: "2026-03-26T11:00:00Z",
+				Action:    "install",
+				Resolved: []ResolvedSkill{
+					{
+						Name:      "child",
+						Version:   "1.0.0",
+						Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+						Reference: "oci://registry.example.com/agentskills/child@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+					},
+					{
+						Name:      "root",
+						Version:   "1.0.0",
+						Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+						Reference: "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					},
+				},
+			},
+		},
+	}
+
+	if err := WriteState(targetDir, state); err != nil {
+		t.Fatalf("WriteState() error = %v", err)
+	}
+
+	loaded, err := LoadState(targetDir)
+	if err != nil {
+		t.Fatalf("LoadState() error = %v", err)
+	}
+	if !equalResolvedSets(loaded.Active, state.Active) {
+		t.Fatalf("loaded active = %#v, want %#v", loaded.Active, state.Active)
 	}
 }
 
@@ -992,7 +1046,21 @@ func copyDir(src, dst string) error {
 	})
 }
 
-func equalResolvedSets(left, right []ResolvedSkill) bool { return equalResolvedSlices(left, right) }
+func equalResolvedSets(left, right []ResolvedSkill) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	byName := make(map[string]ResolvedSkill, len(left))
+	for _, entry := range left {
+		byName[entry.Name] = entry
+	}
+	for _, entry := range right {
+		if got, ok := byName[entry.Name]; !ok || got != entry {
+			return false
+		}
+	}
+	return true
+}
 
 func activeSkillVersion(t *testing.T, active []ResolvedSkill, name string) string {
 	t.Helper()

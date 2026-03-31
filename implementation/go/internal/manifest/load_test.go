@@ -76,6 +76,23 @@ func TestLoadReaderRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
+func TestLoadReaderRejectsSemanticallyInvalidDependencyConstraint(t *testing.T) {
+	_, err := LoadReader(strings.NewReader(`{
+  "schemaVersion": "v1",
+  "packageType": "skill",
+  "name": "root",
+  "version": "1.0.0",
+  "skill": {"entrypoint": "SKILL.md"},
+  "dependencies": [{"name": "child", "version": "1.2"}]
+}`))
+	if err == nil {
+		t.Fatal("LoadReader() error = nil, want semantic validation failure")
+	}
+	if !strings.Contains(err.Error(), "constraint") {
+		t.Fatalf("LoadReader() error = %q, want dependency constraint context", err)
+	}
+}
+
 func TestLoadReaderUsesEmbeddedSchemaAtRuntime(t *testing.T) {
 	schemaPath := packagePath(t, "../../../../schemas/skill-manifest-v1.schema.json")
 	renamedPath := schemaPath + ".bak"

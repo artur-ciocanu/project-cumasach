@@ -15,12 +15,17 @@ type Root struct {
 }
 
 func NewExactRoot(reference string) (Root, error) {
+	return NewExactRootWithBase(reference, "")
+}
+
+func NewExactRootWithBase(reference, ociBase string) (Root, error) {
 	reference = strings.TrimSpace(reference)
+	ociBase = strings.TrimSpace(ociBase)
 	if reference == "" {
 		return Root{}, fmt.Errorf("exact root reference must not be empty")
 	}
 
-	return Root{reference: reference}, nil
+	return Root{reference: reference, ociBase: ociBase}, nil
 }
 
 func NewNamedRoot(name, ociBase string) (Root, error) {

@@ -50,12 +50,17 @@ func ResolveGraph(ctx context.Context, registry oci.Registry, root Root) (Graph,
 
 func (r *packageResolver) resolveRoot(root Root) (SelectedPackage, error) {
 	if root.IsExact() {
-		base, err := oci.RepositoryParent(root.Reference())
+		selected, err := r.fetchSelectedByReference(root.Reference())
 		if err != nil {
 			return SelectedPackage{}, err
 		}
-		r.base = base
-		return r.fetchSelectedByReference(root.Reference())
+		if len(selected.Manifest.Dependencies) > 0 {
+			if root.OCIBase() == "" {
+				return SelectedPackage{}, fmt.Errorf("exact artifact reference %q has dependencies; --from is required to provide the dependency base", root.Reference())
+			}
+			r.base = root.OCIBase()
+		}
+		return selected, nil
 	}
 
 	r.base = root.OCIBase()
