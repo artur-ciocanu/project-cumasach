@@ -314,8 +314,7 @@ func TestInstallCommandLockfileMode(t *testing.T) {
 		}
 	})
 
-	t.Run("from is ignored for fetch selection once root matches", func(t *testing.T) {
-		targetDir := t.TempDir()
+	t.Run("package name mixed form rejects repository mismatch", func(t *testing.T) {
 		cmd := newRootCmd()
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
@@ -323,16 +322,17 @@ func TestInstallCommandLockfileMode(t *testing.T) {
 		cmd.SetArgs([]string{
 			"install",
 			"root",
-			"--from", "registry.invalid/unused",
+			"--from", "registry.example.com/other",
 			"--lockfile", lockfilePath,
-			"--target", targetDir,
+			"--target", t.TempDir(),
 		})
 
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("Execute() error = %v", err)
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("Execute() error = nil, want root mismatch failure")
 		}
-		if _, err := os.Stat(filepath.Join(targetDir, "root", "SKILL.md")); err != nil {
-			t.Fatalf("Stat(root/SKILL.md) error = %v", err)
+		if !strings.Contains(err.Error(), "does not match lockfile root") {
+			t.Fatalf("Execute() error = %q, want root mismatch context", err)
 		}
 	})
 }

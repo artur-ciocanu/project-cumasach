@@ -22,7 +22,7 @@ func BuildTGZ(w io.Writer, sourceDir string, options BuildOptions) error {
 		return err
 	}
 
-	stagingDir, err := stageSkillDir(sourceDir)
+	stagingDir, err := stageSkillDir(sourceDir, loaded.Name)
 	if err != nil {
 		return err
 	}
@@ -54,10 +54,6 @@ func validateSkillDir(sourceDir string) (manifest.Manifest, error) {
 		return manifest.Manifest{}, fmt.Errorf("load source manifest: %w", err)
 	}
 
-	if filepath.Base(filepath.Clean(sourceDir)) != loaded.Name {
-		return manifest.Manifest{}, fmt.Errorf("source directory %q does not match manifest name %q", filepath.Base(filepath.Clean(sourceDir)), loaded.Name)
-	}
-
 	if info, err := os.Stat(filepath.Join(sourceDir, "SKILL.md")); err != nil {
 		if os.IsNotExist(err) {
 			return manifest.Manifest{}, fmt.Errorf("skill directory missing %q", filepath.Join(sourceDir, "SKILL.md"))
@@ -70,13 +66,13 @@ func validateSkillDir(sourceDir string) (manifest.Manifest, error) {
 	return loaded, nil
 }
 
-func stageSkillDir(sourceDir string) (string, error) {
+func stageSkillDir(sourceDir, packageName string) (string, error) {
 	parentDir, err := os.MkdirTemp("", "skill-package-")
 	if err != nil {
 		return "", fmt.Errorf("create staging directory: %w", err)
 	}
 
-	destRoot := filepath.Join(parentDir, filepath.Base(filepath.Clean(sourceDir)))
+	destRoot := filepath.Join(parentDir, packageName)
 	if err := copyTree(sourceDir, destRoot); err != nil {
 		os.RemoveAll(parentDir)
 		return "", err

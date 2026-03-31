@@ -66,7 +66,7 @@ func TestBuildTGZRejectsInvalidSkillDirectory(t *testing.T) {
 	}
 }
 
-func TestBuildTGZRejectsDirectoryManifestNameMismatch(t *testing.T) {
+func TestBuildTGZStagesArchiveUnderManifestName(t *testing.T) {
 	sourceDir := copySkillFixture(t, "list-directory")
 	renamedDir := filepath.Join(filepath.Dir(sourceDir), "wrong-name")
 	if err := os.Rename(sourceDir, renamedDir); err != nil {
@@ -74,13 +74,16 @@ func TestBuildTGZRejectsDirectoryManifestNameMismatch(t *testing.T) {
 	}
 
 	var archive bytes.Buffer
-	err := BuildTGZ(&archive, renamedDir, BuildOptions{IncludeFilesSHA256: true})
-	if err == nil {
-		t.Fatal("BuildTGZ() error = nil, want manifest name mismatch failure")
+	if err := BuildTGZ(&archive, renamedDir, BuildOptions{IncludeFilesSHA256: true}); err != nil {
+		t.Fatalf("BuildTGZ() error = %v", err)
 	}
 
-	if !strings.Contains(err.Error(), "manifest name") {
-		t.Fatalf("BuildTGZ() error = %q, want manifest name context", err)
+	entries := readArchiveEntries(t, archive.Bytes())
+	if _, ok := entries["list-directory/SKILL.md"]; !ok {
+		t.Fatalf("archive entries = %#v, want manifest-named top-level directory", entries)
+	}
+	if _, ok := entries["wrong-name/SKILL.md"]; ok {
+		t.Fatalf("archive entries = %#v, want source directory name to be ignored", entries)
 	}
 }
 

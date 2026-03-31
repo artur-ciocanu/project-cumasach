@@ -106,6 +106,17 @@ func MatchRootInput(lockfile File, rawInput string, from string) error {
 	if rawInput != lockfile.Root.Name {
 		return fmt.Errorf("requested package name %q does not match lockfile root %q", rawInput, lockfile.Root.Name)
 	}
+	rootRef, err := validateReference(lockfile.Root.Reference)
+	if err != nil {
+		return fmt.Errorf("lockfile root reference %q is invalid: %w", lockfile.Root.Reference, err)
+	}
+	requestedRepo, err := oci.DependencyRepository(from, rawInput)
+	if err != nil {
+		return fmt.Errorf("requested package %q from %q is invalid: %w", rawInput, from, err)
+	}
+	if requestedRepo != rootRef.Repository {
+		return fmt.Errorf("requested package %q from %q does not match lockfile root %q", rawInput, from, lockfile.Root.Reference)
+	}
 	return nil
 }
 

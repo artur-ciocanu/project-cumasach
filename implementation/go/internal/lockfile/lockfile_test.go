@@ -405,6 +405,7 @@ func TestMatchRootInput(t *testing.T) {
 		{name: "matching canonical ref", input: lock.Root.Reference, wantErr: ""},
 		{name: "matching package name", input: lock.Root.Name, from: "registry.example.com/agentskills", wantErr: ""},
 		{name: "named root missing from", input: lock.Root.Name, wantErr: "--from is required"},
+		{name: "named root repository mismatch", input: lock.Root.Name, from: "registry.example.com/other", wantErr: "does not match lockfile root"},
 		{name: "named root mismatch", input: "other-skill", from: "registry.example.com/agentskills", wantErr: "does not match lockfile root"},
 		{name: "ref mismatch", input: "oci://registry.example.com/agentskills/root-skill@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", wantErr: "does not match lockfile root"},
 		{name: "malformed ref", input: "oci://registry.example.com/agentskills/root-skill@sha256:short", wantErr: "invalid checksum digest length"},
