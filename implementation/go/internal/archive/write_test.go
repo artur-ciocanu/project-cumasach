@@ -399,6 +399,26 @@ func TestExtractTGZTempRejectsDuplicateEntries(t *testing.T) {
 	}
 }
 
+func TestWriteTGZRejectsSymlinksInSourceDirectory(t *testing.T) {
+	sourceDir, expectedManifest := createSkillTree(t, "list-directory")
+
+	symlinkPath := filepath.Join(sourceDir, "references", "linked.txt")
+	targetPath := filepath.Join(sourceDir, "SKILL.md")
+	if err := os.Symlink(targetPath, symlinkPath); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	err := WriteTGZ(&buf, sourceDir, expectedManifest)
+	if err == nil {
+		t.Fatal("WriteTGZ() error = nil, want symlink rejection failure")
+	}
+
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("WriteTGZ() error = %q, want symlink context", err)
+	}
+}
+
 type tarEntry struct {
 	Name     string
 	Typeflag byte
