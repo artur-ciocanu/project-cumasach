@@ -45,17 +45,13 @@ func TestLoadORASInteropConfigFromEnv(t *testing.T) {
 			},
 		},
 		{
-			name: "legacy artifactory env remains supported",
+			name: "legacy artifactory env is ignored",
 			env: map[string]string{
 				"CUMASACH_ARTIFACTORY_REPOSITORY": "registry.example.com/agentskills/demo",
 				"ARTIFACTORY_USER":                "robot",
 				"ARTIFACTORY_PASSWORD":            "secret",
 			},
-			want: orasInteropConfig{
-				repository: "registry.example.com/agentskills/demo",
-				username:   "robot",
-				password:   "secret",
-			},
+			wantSkip: "CUMASACH_ORAS_CONFORMANCE_REPOSITORY",
 		},
 		{
 			name:     "missing repository requests skip",
@@ -202,26 +198,13 @@ func loadORASInteropConfig(t *testing.T) orasInteropConfig {
 }
 
 func loadORASInteropConfigFromEnv(getenv func(string) string) (orasInteropConfig, string) {
-	repository := firstValue(
-		getenv("CUMASACH_ORAS_CONFORMANCE_REPOSITORY"),
-		getenv("CUMASACH_ARTIFACTORY_REPOSITORY"),
-	)
+	repository := getenv("CUMASACH_ORAS_CONFORMANCE_REPOSITORY")
 	if repository == "" {
 		return orasInteropConfig{}, "set CUMASACH_ORAS_CONFORMANCE_REPOSITORY to run ORAS conformance tests"
 	}
 
-	username := firstValue(
-		getenv("CUMASACH_ORAS_CONFORMANCE_USERNAME"),
-		getenv("ARTIFACTORY_USER"),
-	)
-	password := firstValue(
-		getenv("CUMASACH_ORAS_CONFORMANCE_PASSWORD"),
-		getenv("CUMASACH_ORAS_CONFORMANCE_PASS"),
-		getenv("CUMASACH_ORAS_CONFORMANCE_TOKEN"),
-		getenv("ARTIFACTORY_PASSWORD"),
-		getenv("ARTIFACTORY_PASS"),
-		getenv("ARTIFACTORY_API_TOKEN"),
-	)
+	username := getenv("CUMASACH_ORAS_CONFORMANCE_USERNAME")
+	password := getenv("CUMASACH_ORAS_CONFORMANCE_PASSWORD")
 	if username == "" || password == "" {
 		return orasInteropConfig{}, "set CUMASACH_ORAS_CONFORMANCE_USERNAME and CUMASACH_ORAS_CONFORMANCE_PASSWORD to run ORAS conformance tests"
 	}
@@ -230,7 +213,7 @@ func loadORASInteropConfigFromEnv(getenv func(string) string) (orasInteropConfig
 		repository: repository,
 		username:   username,
 		password:   password,
-		plainHTTP:  firstValue(getenv("CUMASACH_ORAS_CONFORMANCE_PLAIN_HTTP"), getenv("CUMASACH_ARTIFACTORY_PLAIN_HTTP")) == "1",
+		plainHTTP:  getenv("CUMASACH_ORAS_CONFORMANCE_PLAIN_HTTP") == "1",
 	}, ""
 }
 

@@ -91,7 +91,7 @@ Before running the helper, the exact repo root or worktree root that you will in
 mise trust
 ```
 
-The helper script is the canonical and supported way to run the release-gating proof. It self-wraps through `mise exec --` so both `go` and the test's `oras` subprocess come from the pinned toolchain in `mise.toml`. It fails fast with a targeted trust message when that exact repo/worktree root is still untrusted. It preserves these documented legacy aliases: `CUMASACH_ARTIFACTORY_REPOSITORY`, `CUMASACH_ARTIFACTORY_PLAIN_HTTP`, `ARTIFACTORY_USER`, `ARTIFACTORY_PASSWORD`, `ARTIFACTORY_PASS`, and `ARTIFACTORY_API_TOKEN`, plus the older password aliases `CUMASACH_ORAS_CONFORMANCE_PASS` and `CUMASACH_ORAS_CONFORMANCE_TOKEN`. The `CUMASACH_ORAS_CONFORMANCE_*` names are the canonical interface.
+The helper script is the canonical and supported way to run the release-gating proof. It self-wraps through `mise exec --` so both `go` and the test's `oras` subprocess come from the pinned toolchain in `mise.toml`. It fails fast with a targeted trust message when that exact repo/worktree root is still untrusted. The supported interface is the `CUMASACH_ORAS_CONFORMANCE_*` environment-variable set documented above.
 
 The script runs only:
 
