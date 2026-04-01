@@ -26,6 +26,8 @@ func newVerifyCmd() *cobra.Command {
 			)
 			if _, parseErr := oci.ParseReference(input); parseErr == nil {
 				result, err = verifypkg.VerifyReference(cmd.Context(), newVerifyRegistry(), input)
+			} else if oci.LooksLikeReference(input) {
+				return parseErr
 			} else {
 				result, err = verifypkg.VerifyPackage(input)
 			}

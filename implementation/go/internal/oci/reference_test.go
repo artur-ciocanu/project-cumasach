@@ -49,6 +49,14 @@ func TestParseReferenceRejectsNonSHA256Digest(t *testing.T) {
 	}
 }
 
+func TestParseReferenceRejectsTagQualifiedRepositoryName(t *testing.T) {
+	raw := "oci://registry.example.com/agentskills/list-directory:1.2.3@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	if _, err := ParseReference(raw); err == nil {
+		t.Fatal("ParseReference() error = nil, want error")
+	}
+}
+
 func TestParsePersistedReferenceAcceptsCanonicalDigestReference(t *testing.T) {
 	raw := "oci://registry.example.com/agentskills/list-directory@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
@@ -75,5 +83,72 @@ func TestParsePersistedReferenceRejectsNonCanonicalRawString(t *testing.T) {
 
 	if _, err := ParsePersistedReference(raw); err == nil {
 		t.Fatal("ParsePersistedReference() error = nil, want error")
+	}
+}
+
+func TestLooksLikeReference(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{
+			name:  "canonical OCI reference",
+			input: "oci://registry.example.com/agentskills/list-directory@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			want:  true,
+		},
+		{
+			name:  "explicit OCI tgz-like reference",
+			input: "oci://registry.example.com/agentskills/list-directory.tgz",
+			want:  true,
+		},
+		{
+			name:  "plain OCI digest reference",
+			input: "registry.example.com/agentskills/list-directory@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			want:  true,
+		},
+		{
+			name:  "malformed OCI digest reference",
+			input: "oci://registry.example.com/agentskills/list-directory@sha256:notadigest",
+			want:  true,
+		},
+		{
+			name:  "malformed plain OCI digest reference",
+			input: "registry.example.com/agentskills/list-directory@sha256",
+			want:  true,
+		},
+		{
+			name:  "plain OCI locator without path",
+			input: "registry.example.com@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			want:  true,
+		},
+		{
+			name:  "plain OCI tag reference",
+			input: "registry.example.com/agentskills/list-directory:1.2.3",
+			want:  true,
+		},
+		{
+			name:  "plain OCI empty digest reference",
+			input: "registry.example.com/agentskills/list-directory@",
+			want:  true,
+		},
+		{
+			name:  "archive path with at sign",
+			input: "/tmp/build@v1/list-directory-1.2.3.tgz",
+			want:  false,
+		},
+		{
+			name:  "package archive path",
+			input: "/tmp/list-directory-1.2.3.tgz",
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := LooksLikeReference(tt.input); got != tt.want {
+				t.Fatalf("LooksLikeReference(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
 	}
 }
