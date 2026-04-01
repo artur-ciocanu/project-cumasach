@@ -166,14 +166,22 @@ func validateStateSemantics(state State) error {
 		}
 	}
 
+	var previousTimestamp time.Time
+	var previousTimestampSet bool
 	for i, entry := range state.History {
 		if err := validateResolvedSet(entry.Resolved, fmt.Sprintf("history[%d].resolved", i)); err != nil {
 			return err
 		}
 
-		if _, err := time.Parse(time.RFC3339, entry.Timestamp); err != nil {
+		timestamp, err := time.Parse(time.RFC3339, entry.Timestamp)
+		if err != nil {
 			return fmt.Errorf("install state semantic validation failed: invalid history[%d].timestamp: %w", i, err)
 		}
+		if previousTimestampSet && timestamp.Before(previousTimestamp) {
+			return fmt.Errorf("install state semantic validation failed: history must be ordered from oldest to newest")
+		}
+		previousTimestamp = timestamp
+		previousTimestampSet = true
 	}
 
 	if len(state.History) > 0 {

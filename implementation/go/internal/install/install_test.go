@@ -483,6 +483,115 @@ func TestLoadStateRejectsNonCanonicalReferencesInActiveAndHistorySnapshots(t *te
 	}
 }
 
+func TestWriteStateRejectsHistoryOutOfChronologicalOrder(t *testing.T) {
+	targetDir := t.TempDir()
+	state := State{
+		SchemaVersion: SchemaVersion,
+		Target:        Target{Path: targetDir},
+		Active: []ResolvedSkill{
+			{
+				Name:      "root",
+				Version:   "1.0.1",
+				Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				Reference: "oci://registry.example.com/agentskills/root@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			},
+		},
+		History: []HistoryEntry{
+			{
+				Timestamp: "2026-03-26T11:00:00Z",
+				Action:    "install",
+				Resolved: []ResolvedSkill{
+					{
+						Name:      "root",
+						Version:   "1.0.0",
+						Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+						Reference: "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					},
+				},
+			},
+			{
+				Timestamp: "2026-03-26T10:00:00Z",
+				Action:    "upgrade",
+				Resolved: []ResolvedSkill{
+					{
+						Name:      "root",
+						Version:   "1.0.1",
+						Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+						Reference: "oci://registry.example.com/agentskills/root@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+					},
+				},
+			},
+		},
+	}
+
+	if err := WriteState(targetDir, state); err == nil {
+		t.Fatal("WriteState() error = nil, want history ordering validation failure")
+	} else if !strings.Contains(err.Error(), "history must be ordered from oldest to newest") {
+		t.Fatalf("WriteState() error = %q, want history ordering context", err)
+	}
+}
+
+func TestLoadStateRejectsHistoryOutOfChronologicalOrder(t *testing.T) {
+	targetDir := t.TempDir()
+	statePath := StatePath(targetDir)
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+		t.Fatalf("MkdirAll(state dir) error = %v", err)
+	}
+
+	state := State{
+		SchemaVersion: SchemaVersion,
+		Target:        Target{Path: targetDir},
+		Active: []ResolvedSkill{
+			{
+				Name:      "root",
+				Version:   "1.0.1",
+				Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				Reference: "oci://registry.example.com/agentskills/root@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			},
+		},
+		History: []HistoryEntry{
+			{
+				Timestamp: "2026-03-26T11:00:00Z",
+				Action:    "install",
+				Resolved: []ResolvedSkill{
+					{
+						Name:      "root",
+						Version:   "1.0.0",
+						Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+						Reference: "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					},
+				},
+			},
+			{
+				Timestamp: "2026-03-26T10:00:00Z",
+				Action:    "upgrade",
+				Resolved: []ResolvedSkill{
+					{
+						Name:      "root",
+						Version:   "1.0.1",
+						Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+						Reference: "oci://registry.example.com/agentskills/root@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("json.Marshal(state) error = %v", err)
+	}
+	if err := os.WriteFile(statePath, raw, 0o644); err != nil {
+		t.Fatalf("WriteFile(state) error = %v", err)
+	}
+
+	if _, err := LoadState(targetDir); err == nil {
+		t.Fatal("LoadState() error = nil, want history ordering validation failure")
+	} else if !strings.Contains(err.Error(), "history must be ordered from oldest to newest") {
+		t.Fatalf("LoadState() error = %q, want history ordering context", err)
+	}
+}
+
 func TestInstallRollsBackActivationWhenStateWriteFails(t *testing.T) {
 	registry := oci.NewMemoryRegistry()
 	targetDir := t.TempDir()
@@ -1082,7 +1191,7 @@ func TestRollback(t *testing.T) {
 		}
 	})
 
-	t.Run("accepts install-state history even when timestamps are not monotonic", func(t *testing.T) {
+	t.Run("rejects install-state history when timestamps are not monotonic", func(t *testing.T) {
 		targetDir := t.TempDir()
 
 		statePath := StatePath(targetDir)
@@ -1130,12 +1239,12 @@ func TestRollback(t *testing.T) {
 			t.Fatalf("WriteFile(bad state) error = %v", err)
 		}
 
-		state, err := LoadState(targetDir)
-		if err != nil {
-			t.Fatalf("LoadState() error = %v", err)
+		_, err := LoadState(targetDir)
+		if err == nil {
+			t.Fatal("LoadState() error = nil, want history ordering validation failure")
 		}
-		if len(state.History) != 2 {
-			t.Fatalf("len(state.History) = %d, want 2", len(state.History))
+		if !strings.Contains(err.Error(), "history must be ordered from oldest to newest") {
+			t.Fatalf("LoadState() error = %q, want history ordering context", err)
 		}
 	})
 
