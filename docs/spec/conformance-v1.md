@@ -37,6 +37,8 @@ Stock `oras` is the reference interoperability target for transport conformance.
 
 ## 3. Required Test Matrix
 
+`go test ./...` is not sufficient release evidence for transport conformance by itself. Release sign-off requires one successful stock-`oras` round-trip against a real registry using `scripts/run-oras-conformance.sh`, which is the supported and canonical entrypoint for that proof.
+
 ### 3.1 Artifact shape
 
 The implementation MUST pass:
@@ -113,6 +115,8 @@ The implementation MUST pass:
 - pulled tarball digest matches the originally published content layer digest
 - pulled config blob matches the mirrored manifest
 
+Release evidence for this section MUST come from one successful execution of `scripts/run-oras-conformance.sh` against a real registry with valid credentials. Before that helper runs, the exact repo root or worktree root containing that helper and its `mise.toml` MUST already be trusted, for example by changing into that same root and running `mise trust`, so the canonical `mise exec --` path can load the pinned toolchain. That helper MUST execute the round-trip test through the repository's pinned toolchain, so both `go` and the stock-`oras` subprocess are resolved from the supported release-gate environment. A general unit or package test run such as `go test ./...` does not satisfy this transport release gate on its own.
+
 ### 3.7 Offline integrity file
 
 A consumer implementation that advertises `.skill/files.sha256` verification support MUST pass:
@@ -151,3 +155,5 @@ Implementers SHOULD automate:
 - ORAS push/pull smoke test against a disposable OCI registry
 - dependency-resolution golden tests
 - rollback state restoration tests
+
+For release sign-off, the ORAS transport proof MUST come from one successful execution of `scripts/run-oras-conformance.sh` against a real registry, because that is the supported stock-`oras` round-trip entrypoint and canonical pinned-toolchain invocation.
