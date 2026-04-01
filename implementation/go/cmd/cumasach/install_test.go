@@ -77,32 +77,6 @@ func TestInstallCommandExactArtifactWithDependenciesRequiresFrom(t *testing.T) {
 	}
 }
 
-func TestInstallCommandRejectsUnsupportedFlags(t *testing.T) {
-	tests := []struct {
-		name string
-		args []string
-		want string
-	}{}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := newRootCmd()
-			var stdout bytes.Buffer
-			cmd.SetOut(&stdout)
-			cmd.SetErr(&stdout)
-			cmd.SetArgs(tt.args)
-
-			err := cmd.Execute()
-			if err == nil {
-				t.Fatal("Execute() error = nil, want failure")
-			}
-			if !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("Execute() error = %q, want %q", err, tt.want)
-			}
-		})
-	}
-}
-
 func TestInstallCommandPackageNameRequiresFrom(t *testing.T) {
 	cmd := newRootCmd()
 	var stdout bytes.Buffer
