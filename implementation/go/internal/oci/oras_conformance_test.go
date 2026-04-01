@@ -208,15 +208,6 @@ func loadORASInteropConfigFromEnv(getenv func(string) string) (orasInteropConfig
 	}, ""
 }
 
-func firstValue(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
 type authenticatedRemoteRegistry struct {
 	config orasInteropConfig
 }
