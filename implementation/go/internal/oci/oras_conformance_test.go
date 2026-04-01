@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -21,15 +22,78 @@ import (
 	"oras.land/oras-go/v2/registry/remote/auth"
 )
 
-func TestORASArtifactoryRoundTrip(t *testing.T) {
-	config := loadArtifactoryInteropConfig(t)
+func TestLoadORASInteropConfigFromEnv(t *testing.T) {
+	tests := []struct {
+		name       string
+		env        map[string]string
+		want       orasInteropConfig
+		wantSkip   string
+	}{
+		{
+			name: "generic conformance env",
+			env: map[string]string{
+				"CUMASACH_ORAS_CONFORMANCE_REPOSITORY": "registry.example.com/agentskills/demo",
+				"CUMASACH_ORAS_CONFORMANCE_USERNAME":   "robot",
+				"CUMASACH_ORAS_CONFORMANCE_PASSWORD":   "secret",
+				"CUMASACH_ORAS_CONFORMANCE_PLAIN_HTTP": "1",
+			},
+			want: orasInteropConfig{
+				repository: "registry.example.com/agentskills/demo",
+				username:   "robot",
+				password:   "secret",
+				plainHTTP:  true,
+			},
+		},
+		{
+			name: "legacy artifactory env remains supported",
+			env: map[string]string{
+				"CUMASACH_ARTIFACTORY_REPOSITORY": "registry.example.com/agentskills/demo",
+				"ARTIFACTORY_USER":                "robot",
+				"ARTIFACTORY_PASSWORD":            "secret",
+			},
+			want: orasInteropConfig{
+				repository: "registry.example.com/agentskills/demo",
+				username:   "robot",
+				password:   "secret",
+			},
+		},
+		{
+			name:     "missing repository requests skip",
+			env:      map[string]string{},
+			wantSkip: "CUMASACH_ORAS_CONFORMANCE_REPOSITORY",
+		},
+	}
 
-	t.Run("fetches an oras-pushed artifact from artifactory", func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, skipReason := loadORASInteropConfigFromEnv(func(name string) string {
+				return tt.env[name]
+			})
+			if tt.wantSkip != "" {
+				if !strings.Contains(skipReason, tt.wantSkip) {
+					t.Fatalf("skipReason = %q, want %q", skipReason, tt.wantSkip)
+				}
+				return
+			}
+			if skipReason != "" {
+				t.Fatalf("skipReason = %q, want empty", skipReason)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("config = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestORASConformanceRoundTrip(t *testing.T) {
+	config := loadORASInteropConfig(t)
+
+	t.Run("fetches an oras-pushed artifact from configured registry", func(t *testing.T) {
 		ctx := context.Background()
 		tag := "cumasach-oras-fetch-" + randomSuffix(t)
 		referenceWithTag := config.repository + ":" + tag
 		manifestJSON := []byte(`{"schemaVersion":"v1","packageType":"skill","name":"oras-fetch","version":"1.0.0","skill":{"entrypoint":"SKILL.md"}}`)
-		archive := []byte("oras artifactory payload bytes")
+		archive := []byte("oras conformance payload bytes")
 
 		tempDir := t.TempDir()
 		configPath := filepath.Join(tempDir, "manifest.json")
@@ -60,7 +124,7 @@ func TestORASArtifactoryRoundTrip(t *testing.T) {
 		}
 	})
 
-	t.Run("an implementation-pushed artifact can be pulled by oras from artifactory", func(t *testing.T) {
+	t.Run("an implementation-pushed artifact can be pulled by oras from configured registry", func(t *testing.T) {
 		ctx := context.Background()
 		registry := newAuthenticatedRemoteRegistry(config)
 		tag := "cumasach-oras-pull-" + randomSuffix(t)
@@ -120,38 +184,59 @@ func TestORASArtifactoryRoundTrip(t *testing.T) {
 	})
 }
 
-type artifactoryInteropConfig struct {
+type orasInteropConfig struct {
 	repository string
 	username   string
 	password   string
 	plainHTTP  bool
 }
 
-func loadArtifactoryInteropConfig(t *testing.T) artifactoryInteropConfig {
+func loadORASInteropConfig(t *testing.T) orasInteropConfig {
 	t.Helper()
 
-	repository := os.Getenv("CUMASACH_ARTIFACTORY_REPOSITORY")
+	config, skipReason := loadORASInteropConfigFromEnv(os.Getenv)
+	if skipReason != "" {
+		t.Skip(skipReason)
+	}
+	return config
+}
+
+func loadORASInteropConfigFromEnv(getenv func(string) string) (orasInteropConfig, string) {
+	repository := firstValue(
+		getenv("CUMASACH_ORAS_CONFORMANCE_REPOSITORY"),
+		getenv("CUMASACH_ARTIFACTORY_REPOSITORY"),
+	)
 	if repository == "" {
-		t.Skip("set CUMASACH_ARTIFACTORY_REPOSITORY to run Artifactory ORAS interoperability tests")
+		return orasInteropConfig{}, "set CUMASACH_ORAS_CONFORMANCE_REPOSITORY to run ORAS conformance tests"
 	}
 
-	username := os.Getenv("ARTIFACTORY_USER")
-	password := firstEnv("ARTIFACTORY_PASSWORD", "ARTIFACTORY_PASS", "ARTIFACTORY_API_TOKEN")
+	username := firstValue(
+		getenv("CUMASACH_ORAS_CONFORMANCE_USERNAME"),
+		getenv("ARTIFACTORY_USER"),
+	)
+	password := firstValue(
+		getenv("CUMASACH_ORAS_CONFORMANCE_PASSWORD"),
+		getenv("CUMASACH_ORAS_CONFORMANCE_PASS"),
+		getenv("CUMASACH_ORAS_CONFORMANCE_TOKEN"),
+		getenv("ARTIFACTORY_PASSWORD"),
+		getenv("ARTIFACTORY_PASS"),
+		getenv("ARTIFACTORY_API_TOKEN"),
+	)
 	if username == "" || password == "" {
-		t.Skip("set ARTIFACTORY_USER and ARTIFACTORY_PASSWORD or ARTIFACTORY_API_TOKEN to run Artifactory ORAS interoperability tests")
+		return orasInteropConfig{}, "set CUMASACH_ORAS_CONFORMANCE_USERNAME and CUMASACH_ORAS_CONFORMANCE_PASSWORD to run ORAS conformance tests"
 	}
 
-	return artifactoryInteropConfig{
+	return orasInteropConfig{
 		repository: repository,
 		username:   username,
 		password:   password,
-		plainHTTP:  os.Getenv("CUMASACH_ARTIFACTORY_PLAIN_HTTP") == "1",
-	}
+		plainHTTP:  firstValue(getenv("CUMASACH_ORAS_CONFORMANCE_PLAIN_HTTP"), getenv("CUMASACH_ARTIFACTORY_PLAIN_HTTP")) == "1",
+	}, ""
 }
 
-func firstEnv(names ...string) string {
-	for _, name := range names {
-		if value := os.Getenv(name); value != "" {
+func firstValue(values ...string) string {
+	for _, value := range values {
+		if value != "" {
 			return value
 		}
 	}
@@ -159,10 +244,10 @@ func firstEnv(names ...string) string {
 }
 
 type authenticatedRemoteRegistry struct {
-	config artifactoryInteropConfig
+	config orasInteropConfig
 }
 
-func newAuthenticatedRemoteRegistry(config artifactoryInteropConfig) authenticatedRemoteRegistry {
+func newAuthenticatedRemoteRegistry(config orasInteropConfig) authenticatedRemoteRegistry {
 	return authenticatedRemoteRegistry{config: config}
 }
 
@@ -219,7 +304,7 @@ func (r authenticatedRemoteRegistry) repository(repository string) (*remote.Repo
 	return repo, nil
 }
 
-func runORAS(t *testing.T, config artifactoryInteropConfig, workingDir string, args ...string) string {
+func runORAS(t *testing.T, config orasInteropConfig, workingDir string, args ...string) string {
 	t.Helper()
 
 	completeArgs := append([]string(nil), args...)

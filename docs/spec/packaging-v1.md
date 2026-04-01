@@ -382,7 +382,9 @@ JSON Schema validation alone does not fully validate artifact-reference correctn
 
 ## 11. Install-State Format
 
-Install state records what is currently active in a given runtime-visible skills directory.
+Install state records the Cumasach-managed active set in a given runtime-visible skills directory.
+
+Install state does not need to enumerate unrelated pre-existing skill directories in that target when those directories are not managed by the implementation.
 
 The install-state file MUST conform to [../../schemas/install-state-v1.schema.json](../../schemas/install-state-v1.schema.json).
 
@@ -403,11 +405,15 @@ Install state exists to support:
 
 ### 11.3 Active view
 
-The `active` array records exactly one active version per skill name in the target runtime-visible directory.
+The `active` array records exactly one active version per managed skill name in the target runtime-visible directory.
 
 Each active entry `reference` MUST be an artifact reference, and each active entry `digest` MUST equal the OCI manifest digest encoded in that `reference`.
 
 The `active` array MUST contain at most one entry for each skill `name`.
+
+Consumers MAY coexist with unrelated pre-existing skill directories in the same runtime-visible directory.
+
+Consumers MUST NOT remove an unrelated pre-existing skill directory during install or rollback solely because it is absent from install state or from a lockfile.
 
 ### 11.4 History semantics
 

@@ -411,6 +411,41 @@ func TestInstallGraph(t *testing.T) {
 		}
 	})
 
+	t.Run("preserves preexisting unmanaged skill directories", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		unmanagedDir := filepath.Join(targetDir, "manual-skill")
+		if err := os.MkdirAll(unmanagedDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll(manual-skill) error = %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(unmanagedDir, "SKILL.md"), []byte("# manual\n"), 0o644); err != nil {
+			t.Fatalf("WriteFile(manual SKILL.md) error = %v", err)
+		}
+
+		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
+		graph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+
+		state, err := Install(context.Background(), Options{
+			Registry:  registry,
+			Graph:     &graph,
+			TargetDir: targetDir,
+		})
+		if err != nil {
+			t.Fatalf("Install(graph) error = %v", err)
+		}
+
+		for _, name := range []string{"manual-skill", "root", "child"} {
+			if _, err := os.Stat(filepath.Join(targetDir, name, "SKILL.md")); err != nil {
+				t.Fatalf("Stat(%s/SKILL.md) error = %v", name, err)
+			}
+		}
+		if len(state.Active) != 2 {
+			t.Fatalf("len(state.Active) = %d, want 2 managed skills", len(state.Active))
+		}
+	})
+
 	t.Run("replaces selected dependency and keeps full active snapshot in state", func(t *testing.T) {
 		registry := oci.NewMemoryRegistry()
 		targetDir := t.TempDir()
@@ -570,6 +605,49 @@ func TestInstallFromLockfile(t *testing.T) {
 		}
 		if !equalResolvedSets(state.Active, state.History[len(state.History)-1].Resolved) {
 			t.Fatalf("newest history = %#v, want active %#v", state.History[len(state.History)-1].Resolved, state.Active)
+		}
+	})
+
+	t.Run("preserves preexisting unmanaged skill directories during lockfile install", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		targetDir := t.TempDir()
+
+		unmanagedDir := filepath.Join(targetDir, "manual-skill")
+		if err := os.MkdirAll(unmanagedDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll(manual-skill) error = %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(unmanagedDir, "SKILL.md"), []byte("# manual\n"), 0o644); err != nil {
+			t.Fatalf("WriteFile(manual SKILL.md) error = %v", err)
+		}
+
+		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
+		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
+		liveGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
+		lock, err := lockfilepkg.FromGraph(liveGraph)
+		if err != nil {
+			t.Fatalf("FromGraph() error = %v", err)
+		}
+		graph, err := lockfilepkg.ToGraph(lock)
+		if err != nil {
+			t.Fatalf("ToGraph() error = %v", err)
+		}
+
+		state, err := Install(context.Background(), Options{
+			Registry:  registry,
+			Graph:     &graph,
+			TargetDir: targetDir,
+		})
+		if err != nil {
+			t.Fatalf("Install(lockfile graph) error = %v", err)
+		}
+
+		for _, name := range []string{"manual-skill", "root", "child"} {
+			if _, err := os.Stat(filepath.Join(targetDir, name, "SKILL.md")); err != nil {
+				t.Fatalf("Stat(%s/SKILL.md) error = %v", name, err)
+			}
+		}
+		if len(state.Active) != 2 {
+			t.Fatalf("len(state.Active) = %d, want 2 managed skills", len(state.Active))
 		}
 	})
 
@@ -801,8 +879,7 @@ func TestRollback(t *testing.T) {
 		}
 	})
 
-	t.Run("fails when install-state history is not ordered oldest to newest", func(t *testing.T) {
-		registry := oci.NewMemoryRegistry()
+	t.Run("accepts install-state history even when timestamps are not monotonic", func(t *testing.T) {
 		targetDir := t.TempDir()
 
 		statePath := StatePath(targetDir)
@@ -851,12 +928,12 @@ func TestRollback(t *testing.T) {
 			t.Fatalf("WriteFile(bad state) error = %v", err)
 		}
 
-		_, err := Rollback(context.Background(), Options{Registry: registry, TargetDir: targetDir})
-		if err == nil {
-			t.Fatal("Rollback() error = nil, want out-of-order history failure")
+		state, err := LoadState(targetDir)
+		if err != nil {
+			t.Fatalf("LoadState() error = %v", err)
 		}
-		if !strings.Contains(err.Error(), "history timestamps are not ordered oldest to newest") {
-			t.Fatalf("Rollback() error = %q, want ordering validation context", err)
+		if len(state.History) != 2 {
+			t.Fatalf("len(state.History) = %d, want 2", len(state.History))
 		}
 	})
 

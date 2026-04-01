@@ -315,23 +315,6 @@ func nextState(targetDir string, selected []ResolvedSkill, timestamp time.Time) 
 	}, nil
 }
 
-func nextRollbackState(previous State, selected []ResolvedSkill, timestamp time.Time) (State, error) {
-	history := make([]HistoryEntry, 0, len(previous.History)+1)
-	history = append(history, previous.History...)
-	history = append(history, HistoryEntry{
-		Timestamp: timestamp.Format(time.RFC3339),
-		Action:    "rollback",
-		Resolved:  append([]ResolvedSkill(nil), selected...),
-	})
-
-	return State{
-		SchemaVersion: SchemaVersion,
-		Target:        previous.Target,
-		Active:        append([]ResolvedSkill(nil), selected...),
-		History:       history,
-	}, nil
-}
-
 func mergeActive(previous, selected []ResolvedSkill) []ResolvedSkill {
 	merged := make(map[string]ResolvedSkill, len(previous)+len(selected))
 	for _, skill := range previous {
@@ -352,6 +335,23 @@ func mergeActive(previous, selected []ResolvedSkill) []ResolvedSkill {
 		active = append(active, merged[name])
 	}
 	return active
+}
+
+func nextRollbackState(previous State, selected []ResolvedSkill, timestamp time.Time) (State, error) {
+	history := make([]HistoryEntry, 0, len(previous.History)+1)
+	history = append(history, previous.History...)
+	history = append(history, HistoryEntry{
+		Timestamp: timestamp.Format(time.RFC3339),
+		Action:    "rollback",
+		Resolved:  append([]ResolvedSkill(nil), selected...),
+	})
+
+	return State{
+		SchemaVersion: SchemaVersion,
+		Target:        previous.Target,
+		Active:        append([]ResolvedSkill(nil), selected...),
+		History:       history,
+	}, nil
 }
 
 func mustParseReference(raw string) oci.Reference {

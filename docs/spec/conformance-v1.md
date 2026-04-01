@@ -77,11 +77,12 @@ The implementation MUST pass:
 
 The implementation MUST pass:
 
-- one active version per skill name in the runtime-visible directory
+- one active version per managed skill name in the runtime-visible directory
 - duplicate skill names in install-state `active` are rejected as malformed
 - duplicate skill names in install-state history snapshots are rejected as malformed
 - active directory name equals the selected package `name`
 - installing a new version replaces the active version in that target
+- install leaves unrelated pre-existing skill directories untouched
 - retained older versions in local cache do not appear in active view
 - flat-directory runtimes see real skill directories only
 - symbolic links, junctions, or other link-like directory entries are not exposed as active skill directories
@@ -95,7 +96,8 @@ The implementation MUST pass:
 - each recorded package `digest` equals the OCI manifest digest encoded in its `reference`
 - lockfile includes the selected root package in `packages`
 - lockfile preserves dependency edges between selected packages
-- install from lockfile reproduces the same active set
+- install from lockfile activates the exact versions recorded for the selected lockfile graph
+- install from lockfile leaves unrelated pre-existing skill directories untouched
 - when install-state history is non-empty, the newest history snapshot equals the top-level `active` set
 - install-state history is ordered from oldest snapshot to newest snapshot
 - rollback restores the snapshot immediately preceding the newest recorded history snapshot

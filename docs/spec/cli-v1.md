@@ -196,6 +196,8 @@ If `--tag` is omitted, implementations SHOULD default the publication tag to the
 
 `install` resolves, fetches, verifies, and activates one root skill and its selected dependencies into a flat runtime-visible skills directory.
 
+Version 1 install behavior is non-destructive with respect to unrelated pre-existing skill directories in the target. An implementation MUST NOT remove an unrelated existing skill solely because it is absent from the current install request or lockfile.
+
 ### 9.2 Invocation forms
 
 Form A, root-driven install:
@@ -217,6 +219,7 @@ All `install` forms MUST:
 - validate fetched or provided package metadata against the v1 rules
 - verify canonical OCI metadata against the mirrored manifest when installing from OCI
 - activate exactly one selected version per skill name into the target flat skills directory
+- leave unrelated pre-existing skill directories in the target untouched
 - record install state
 - append install-state history according to the packaging specification
 
@@ -241,16 +244,18 @@ If `--lockfile` is also supplied in form A:
 
 - the lockfile root MUST match the requested root package identity
 - installation MUST fail if the lockfile root and the requested root disagree
-- the CLI MUST install the exact resolved graph described by the lockfile
+- the CLI MUST install the exact resolved graph described by the lockfile for the requested root package and its dependencies
 - the CLI MUST NOT perform live dependency re-resolution except as required to fetch the pinned artifact references recorded in the lockfile
+- the CLI MUST NOT remove unrelated pre-existing skill directories solely because they are absent from the lockfile
 
 ### 9.5 Lockfile-driven install behavior
 
 If form B is used:
 
 - the root package identity MUST be taken entirely from the lockfile
-- the CLI MUST install the exact resolved graph described by the lockfile
+- the CLI MUST install the exact resolved graph described by the lockfile for the requested root package and its dependencies
 - the CLI MUST NOT perform live dependency re-resolution except as required to fetch the pinned artifact references
+- the CLI MUST NOT remove unrelated pre-existing skill directories solely because they are absent from the lockfile
 
 When `--lockfile` is the only input source:
 

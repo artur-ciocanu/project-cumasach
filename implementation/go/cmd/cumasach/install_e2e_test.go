@@ -31,8 +31,17 @@ func TestInstallCommandEndToEndPackagesPushesAndInstallsDependencies(t *testing.
 	rootPackage := packageSkillWithCLI(t, rootDir)
 	pushSkillWithCLI(t, childPackage, "registry.example.com/agentskills/workspace-notes")
 	pushSkillWithCLI(t, rootPackage, "registry.example.com/agentskills/workspace-summary")
+	unrelatedDir := buildDemoSkillDir(t, "scratchpad", "1.0.0", nil)
+	unrelatedPackage := packageSkillWithCLI(t, unrelatedDir)
+	pushSkillWithCLI(t, unrelatedPackage, "registry.example.com/agentskills/scratchpad")
 
 	targetDir := t.TempDir()
+	runRootCommand(t,
+		"install",
+		"scratchpad",
+		"--from", "registry.example.com/agentskills",
+		"--target", targetDir,
+	)
 	stdout := runRootCommand(t,
 		"install",
 		"workspace-summary",
@@ -44,7 +53,7 @@ func TestInstallCommandEndToEndPackagesPushesAndInstallsDependencies(t *testing.
 		t.Fatalf("stdout = %q, want install summary", stdout)
 	}
 
-	wantEntries := []string{".cumasach", "workspace-notes", "workspace-summary"}
+	wantEntries := []string{".cumasach", "scratchpad", "workspace-notes", "workspace-summary"}
 	gotEntries := listDirNames(t, targetDir)
 	if len(gotEntries) != len(wantEntries) {
 		t.Fatalf("target entries = %v, want %v", gotEntries, wantEntries)
@@ -59,20 +68,23 @@ func TestInstallCommandEndToEndPackagesPushesAndInstallsDependencies(t *testing.
 	if err != nil {
 		t.Fatalf("LoadState() error = %v", err)
 	}
-	if len(state.Active) != 2 {
-		t.Fatalf("len(state.Active) = %d, want 2", len(state.Active))
+	if len(state.Active) != 3 {
+		t.Fatalf("len(state.Active) = %d, want 3", len(state.Active))
 	}
 
-	activeNames := []string{state.Active[0].Name, state.Active[1].Name}
+	activeNames := []string{state.Active[0].Name, state.Active[1].Name, state.Active[2].Name}
 	sort.Strings(activeNames)
-	if strings.Join(activeNames, ",") != "workspace-notes,workspace-summary" {
-		t.Fatalf("active names = %v, want workspace-notes and workspace-summary", activeNames)
+	if strings.Join(activeNames, ",") != "scratchpad,workspace-notes,workspace-summary" {
+		t.Fatalf("active names = %v, want scratchpad, workspace-notes, and workspace-summary", activeNames)
 	}
-	if len(state.History) != 1 {
-		t.Fatalf("len(state.History) = %d, want 1", len(state.History))
+	if _, err := os.Stat(filepath.Join(targetDir, "scratchpad")); err != nil {
+		t.Fatalf("scratchpad should remain active after install, stat error = %v", err)
 	}
-	if len(state.History[0].Resolved) != 2 {
-		t.Fatalf("len(history[0].Resolved) = %d, want 2", len(state.History[0].Resolved))
+	if len(state.History) != 2 {
+		t.Fatalf("len(state.History) = %d, want 2", len(state.History))
+	}
+	if len(state.History[len(state.History)-1].Resolved) != 3 {
+		t.Fatalf("len(newest history.Resolved) = %d, want 3", len(state.History[len(state.History)-1].Resolved))
 	}
 	for _, resolved := range state.Active {
 		if resolved.Reference == "" || resolved.Digest == "" {
@@ -136,6 +148,9 @@ func TestInstallLockfileEndToEnd(t *testing.T) {
 	rootPackage := packageSkillWithCLI(t, rootDir)
 	pushSkillWithCLI(t, childPackage, "registry.example.com/agentskills/workspace-notes")
 	pushSkillWithCLI(t, rootPackage, "registry.example.com/agentskills/workspace-summary")
+	unrelatedDir := buildDemoSkillDir(t, "scratchpad", "1.0.0", nil)
+	unrelatedPackage := packageSkillWithCLI(t, unrelatedDir)
+	pushSkillWithCLI(t, unrelatedPackage, "registry.example.com/agentskills/scratchpad")
 
 	lockfilePath := filepath.Join(t.TempDir(), "skill.lock.json")
 	lockStdout := runRootCommand(t,
@@ -149,6 +164,12 @@ func TestInstallLockfileEndToEnd(t *testing.T) {
 	}
 
 	lockTarget := t.TempDir()
+	runRootCommand(t,
+		"install",
+		"scratchpad",
+		"--from", "registry.example.com/agentskills",
+		"--target", lockTarget,
+	)
 	installStdout := runRootCommand(t,
 		"install",
 		"--lockfile", lockfilePath,
@@ -161,12 +182,18 @@ func TestInstallLockfileEndToEnd(t *testing.T) {
 	liveTarget := t.TempDir()
 	runRootCommand(t,
 		"install",
+		"scratchpad",
+		"--from", "registry.example.com/agentskills",
+		"--target", liveTarget,
+	)
+	runRootCommand(t,
+		"install",
 		"workspace-summary",
 		"--from", "registry.example.com/agentskills",
 		"--target", liveTarget,
 	)
 
-	if got, want := listDirNames(t, lockTarget), []string{".cumasach", "workspace-notes", "workspace-summary"}; strings.Join(got, ",") != strings.Join(want, ",") {
+	if got, want := listDirNames(t, lockTarget), []string{".cumasach", "scratchpad", "workspace-notes", "workspace-summary"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("lock target entries = %v, want %v", got, want)
 	}
 
@@ -178,8 +205,8 @@ func TestInstallLockfileEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadState(liveTarget) error = %v", err)
 	}
-	if len(lockState.History) != 1 || len(lockState.History[0].Resolved) != len(lockState.Active) {
-		t.Fatalf("lockfile state history = %#v, want one snapshot matching active", lockState.History)
+	if len(lockState.History) != 2 || len(lockState.History[len(lockState.History)-1].Resolved) != len(lockState.Active) {
+		t.Fatalf("lockfile state history = %#v, want newest snapshot matching active", lockState.History)
 	}
 	if normalizeResolved(lockState.Active) != normalizeResolved(liveState.Active) {
 		t.Fatalf("lockfile active = %v, want live active %v", normalizeResolved(lockState.Active), normalizeResolved(liveState.Active))

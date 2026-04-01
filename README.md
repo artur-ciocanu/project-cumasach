@@ -63,6 +63,35 @@ The format is intentionally OCI-native. A valid Cumasach artifact must be pushab
 - `rollback`
 - `verify`
 
+## ORAS Conformance Check
+
+The Go reference implementation includes a stock-`oras` round-trip conformance test against a real registry.
+
+Set these environment variables:
+
+```bash
+export CUMASACH_ORAS_CONFORMANCE_REPOSITORY=registry.example.com/agentskills/conformance
+export CUMASACH_ORAS_CONFORMANCE_USERNAME=robot
+export CUMASACH_ORAS_CONFORMANCE_PASSWORD=secret
+# optional for HTTP-only test registries
+export CUMASACH_ORAS_CONFORMANCE_PLAIN_HTTP=1
+```
+
+Then run:
+
+```bash
+bash scripts/run-oras-conformance.sh
+```
+
+The script runs:
+
+```bash
+cd implementation/go
+go test ./internal/oci -run '^TestORASConformanceRoundTrip$' -count=1
+```
+
+Legacy `CUMASACH_ARTIFACTORY_*` and `ARTIFACTORY_*` variables remain accepted by the test as compatibility aliases, but the `CUMASACH_ORAS_CONFORMANCE_*` names are the canonical interface.
+
 ## Reference CLI
 
 The current Go reference implementation lives in `implementation/go`.
@@ -150,6 +179,8 @@ The runtime-visible skill entry remains flat:
 - `/tmp/cumasach-skills/list-directory`
 
 The hidden `.cumasach/` directory is CLI metadata, not runtime-facing skill content.
+
+Installing with Cumasach is non-destructive with respect to unrelated pre-existing skills already present in the target directory. The CLI manages and records the skills it installs, but it does not delete unrelated user-provided skill directories just because they are outside the current install request or lockfile.
 
 ### Dependency-Aware Install
 
