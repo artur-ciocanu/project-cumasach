@@ -386,6 +386,8 @@ func graphFromResolvedSnapshot(snapshot []ResolvedSkill) (resolve.Graph, error) 
 	}
 	slices.Sort(names)
 
+	// The rollback graph is used solely for fetch-and-activate; the root identity
+	// is not meaningful. Pick the alphabetically first name for determinism.
 	return resolve.Graph{
 		Root:     names[0],
 		Packages: packages,
