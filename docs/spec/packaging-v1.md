@@ -518,3 +518,7 @@ These are explicitly out of scope for v1 but likely candidates for later version
 - profile- or environment-scoped activation sets
 - package collections or bundles
 - optional feature flags for dependencies
+- **Extraction size limits** — v1 does not define maximum archive or file size
+  constraints during extraction. Implementations SHOULD consider enforcing
+  configurable size limits in production deployments to guard against
+  decompression-bomb payloads.
