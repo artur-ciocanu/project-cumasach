@@ -9,7 +9,6 @@ import (
 
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/resolve"
-	"oras.land/oras-go/v2/registry/remote"
 )
 
 func LoadFile(path string) (File, error) {
@@ -188,20 +187,7 @@ func validatePackageReference(pkg Package) error {
 }
 
 func validateReference(raw string) (oci.Reference, error) {
-	ref, err := oci.ParseReference(raw)
-	if err != nil {
-		return oci.Reference{}, err
-	}
-	if ref.Canonical() != raw {
-		return oci.Reference{}, fmt.Errorf("reference %q is not canonical", raw)
-	}
-	if _, err := remote.NewRepository(ref.Repository); err != nil {
-		return oci.Reference{}, fmt.Errorf("repository %q is not a valid OCI locator: %w", ref.Repository, err)
-	}
-	if strings.Contains(ref.Repository[strings.LastIndex(ref.Repository, "/")+1:], ":") {
-		return oci.Reference{}, fmt.Errorf("reference %q must not include a tag-qualified repository name", raw)
-	}
-	return ref, nil
+	return oci.ParsePersistedReference(raw)
 }
 
 func validateAcyclic(graph map[string][]string) error {

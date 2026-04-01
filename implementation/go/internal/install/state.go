@@ -194,7 +194,7 @@ func validateResolvedSet(entries []ResolvedSkill, label string) error {
 		}
 		seen[entry.Name] = struct{}{}
 
-		ref, err := oci.ParseReference(entry.Reference)
+		ref, err := oci.ParsePersistedReference(entry.Reference)
 		if err != nil {
 			return fmt.Errorf("install state semantic validation failed: invalid reference in %s: %w", label, err)
 		}

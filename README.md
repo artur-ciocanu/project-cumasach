@@ -65,6 +65,8 @@ The format is intentionally OCI-native. A valid Cumasach artifact must be pushab
 
 ## ORAS Conformance Check
 
+`go test ./...` is not sufficient release evidence for transport conformance by itself. Release sign-off requires one successful stock-`oras` round-trip against a real registry, and `scripts/run-oras-conformance.sh` is the supported and canonical entrypoint for that proof.
+
 The Go reference implementation includes a stock-`oras` round-trip conformance test against a real registry.
 
 Set these environment variables:
@@ -77,20 +79,28 @@ export CUMASACH_ORAS_CONFORMANCE_PASSWORD=secret
 export CUMASACH_ORAS_CONFORMANCE_PLAIN_HTTP=1
 ```
 
-Then run:
+Then run the canonical release-gate command from the repo root:
 
 ```bash
 bash scripts/run-oras-conformance.sh
 ```
 
-The script runs:
+Before running the helper, the exact repo root or worktree root that you will invoke `scripts/run-oras-conformance.sh` from must already be trusted so `mise exec --` can load the pinned toolchain. Change into that same root and run:
+
+```bash
+mise trust
+```
+
+The helper script is the canonical and supported way to run the release-gating proof. It self-wraps through `mise exec --` so both `go` and the test's `oras` subprocess come from the pinned toolchain in `mise.toml`. It fails fast with a targeted trust message when that exact repo/worktree root is still untrusted. It preserves these documented legacy aliases: `CUMASACH_ARTIFACTORY_REPOSITORY`, `CUMASACH_ARTIFACTORY_PLAIN_HTTP`, `ARTIFACTORY_USER`, `ARTIFACTORY_PASSWORD`, `ARTIFACTORY_PASS`, and `ARTIFACTORY_API_TOKEN`, plus the older password aliases `CUMASACH_ORAS_CONFORMANCE_PASS` and `CUMASACH_ORAS_CONFORMANCE_TOKEN`. The `CUMASACH_ORAS_CONFORMANCE_*` names are the canonical interface.
+
+The script runs only:
 
 ```bash
 cd implementation/go
-go test ./internal/oci -run '^TestORASConformanceRoundTrip$' -count=1
+mise exec -- go test ./internal/oci -run '^TestORASConformanceRoundTrip$' -count=1
 ```
 
-Legacy `CUMASACH_ARTIFACTORY_*` and `ARTIFACTORY_*` variables remain accepted by the test as compatibility aliases, but the `CUMASACH_ORAS_CONFORMANCE_*` names are the canonical interface.
+It exits non-zero when required credentials are missing or when the test fails.
 
 ## Reference CLI
 

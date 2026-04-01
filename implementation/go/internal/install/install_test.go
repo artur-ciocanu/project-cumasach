@@ -182,33 +182,32 @@ func TestInstallRejectsMalformedExistingInstallState(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
 		t.Fatalf("MkdirAll(state dir) error = %v", err)
 	}
-	raw := `{
-  "schemaVersion": "v1",
-  "target": {"path": "` + targetDir + `"},
-  "active": [
-    {
-      "name": "list-directory",
-      "version": "1.2.3",
-      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "reference": "oci://registry.example.com/agentskills/list-directory@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    }
-  ],
-  "history": [
-    {
-      "timestamp": "2026-03-26T11:00:00Z",
-      "action": "install",
-      "resolved": [
-        {
-          "name": "list-directory",
-          "version": "1.2.2",
-          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "reference": "oci://registry.example.com/agentskills/list-directory@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-        }
-      ]
-    }
-  ]
-}`
-	if err := os.WriteFile(statePath, []byte(raw), 0o644); err != nil {
+	if err := writeInstallStateFixture(statePath, State{
+		SchemaVersion: SchemaVersion,
+		Target:        Target{Path: targetDir},
+		Active: []ResolvedSkill{
+			{
+				Name:      "list-directory",
+				Version:   "1.2.3",
+				Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Reference: "oci://registry.example.com/agentskills/list-directory@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			},
+		},
+		History: []HistoryEntry{
+			{
+				Timestamp: "2026-03-26T11:00:00Z",
+				Action:    "install",
+				Resolved: []ResolvedSkill{
+					{
+						Name:      "list-directory",
+						Version:   "1.2.2",
+						Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+						Reference: "oci://registry.example.com/agentskills/list-directory@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+					},
+				},
+			},
+		},
+	}); err != nil {
 		t.Fatalf("WriteFile(bad state) error = %v", err)
 	}
 
@@ -276,6 +275,211 @@ func TestWriteStateAcceptsEquivalentActiveAndHistorySetsInDifferentOrders(t *tes
 	}
 	if !equalResolvedSets(loaded.Active, state.Active) {
 		t.Fatalf("loaded active = %#v, want %#v", loaded.Active, state.Active)
+	}
+}
+
+func TestWriteStateRejectsNonCanonicalReferencesInActiveAndHistorySnapshots(t *testing.T) {
+	targetDir := t.TempDir()
+
+	tests := []struct {
+		name  string
+		state State
+		want  string
+	}{
+		{
+			name: "active",
+			state: State{
+				SchemaVersion: SchemaVersion,
+				Target:        Target{Path: targetDir},
+				Active: []ResolvedSkill{
+					{
+						Name:      "root",
+						Version:   "1.0.0",
+						Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+						Reference: "oci://registry.example.com/agentskills/root:1.0.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					},
+				},
+				History: []HistoryEntry{
+					{
+						Timestamp: "2026-03-26T11:00:00Z",
+						Action:    "install",
+						Resolved: []ResolvedSkill{
+							{
+								Name:      "root",
+								Version:   "1.0.0",
+								Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+								Reference: "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+							},
+						},
+					},
+				},
+			},
+			want: "invalid reference in active",
+		},
+		{
+			name: "history",
+			state: State{
+				SchemaVersion: SchemaVersion,
+				Target:        Target{Path: targetDir},
+				Active: []ResolvedSkill{
+					{
+						Name:      "root",
+						Version:   "1.0.0",
+						Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+						Reference: "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					},
+				},
+				History: []HistoryEntry{
+					{
+						Timestamp: "2026-03-26T10:00:00Z",
+						Action:    "install",
+						Resolved: []ResolvedSkill{
+							{
+								Name:      "root",
+								Version:   "1.0.0",
+								Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+								Reference: "oci://registry.example.com/agentskills/root:1.0.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+							},
+						},
+					},
+					{
+						Timestamp: "2026-03-26T11:00:00Z",
+						Action:    "install",
+						Resolved: []ResolvedSkill{
+							{
+								Name:      "root",
+								Version:   "1.0.0",
+								Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+								Reference: "oci://registry.example.com/agentskills/root:1.0.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+							},
+						},
+					},
+				},
+			},
+			want: "invalid reference in history[0].resolved",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := WriteState(targetDir, tt.state)
+			if err == nil {
+				t.Fatal("WriteState() error = nil, want semantic validation failure")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("WriteState() error = %q, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadStateRejectsNonCanonicalReferencesInActiveAndHistorySnapshots(t *testing.T) {
+	tests := []struct {
+		name  string
+		state State
+		want  string
+	}{
+		{
+			name: "active",
+			state: State{
+				SchemaVersion: SchemaVersion,
+				Target:        Target{Path: "/tmp/target"},
+				Active: []ResolvedSkill{
+					{
+						Name:      "root",
+						Version:   "1.0.0",
+						Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+						Reference: "oci://registry.example.com/agentskills/root:1.0.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					},
+				},
+				History: []HistoryEntry{
+					{
+						Timestamp: "2026-03-26T11:00:00Z",
+						Action:    "install",
+						Resolved: []ResolvedSkill{
+							{
+								Name:      "root",
+								Version:   "1.0.0",
+								Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+								Reference: "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+							},
+						},
+					},
+				},
+			},
+			want: "invalid reference in active",
+		},
+		{
+			name: "history",
+			state: State{
+				SchemaVersion: SchemaVersion,
+				Target:        Target{Path: "/tmp/target"},
+				Active: []ResolvedSkill{
+					{
+						Name:      "root",
+						Version:   "1.0.0",
+						Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+						Reference: "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					},
+				},
+				History: []HistoryEntry{
+					{
+						Timestamp: "2026-03-26T10:00:00Z",
+						Action:    "install",
+						Resolved: []ResolvedSkill{
+							{
+								Name:      "root",
+								Version:   "1.0.0",
+								Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+								Reference: "oci://registry.example.com/agentskills/root:1.0.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+							},
+						},
+					},
+					{
+						Timestamp: "2026-03-26T11:00:00Z",
+						Action:    "install",
+						Resolved: []ResolvedSkill{
+							{
+								Name:      "root",
+								Version:   "1.0.0",
+								Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+								Reference: "oci://registry.example.com/agentskills/root:1.0.0@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+							},
+						},
+					},
+				},
+			},
+			want: "invalid reference in history[0].resolved",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			targetDir := t.TempDir()
+			statePath := StatePath(targetDir)
+			if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+				t.Fatalf("MkdirAll(state dir) error = %v", err)
+			}
+
+			state := tt.state
+			state.Target.Path = targetDir
+			raw, marshalErr := json.Marshal(state)
+			if marshalErr != nil {
+				t.Fatalf("json.Marshal(state) error = %v", marshalErr)
+			}
+
+			if err := os.WriteFile(statePath, raw, 0o644); err != nil {
+				t.Fatalf("WriteFile(state) error = %v", err)
+			}
+
+			_, err := LoadState(targetDir)
+			if err == nil {
+				t.Fatal("LoadState() error = nil, want semantic validation failure")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("LoadState() error = %q, want substring %q", err, tt.want)
+			}
+		})
 	}
 }
 
@@ -847,26 +1051,25 @@ func TestRollback(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
 			t.Fatalf("MkdirAll(state dir) error = %v", err)
 		}
-		raw := `{
-  "schemaVersion": "v1",
-  "target": {"path": "` + targetDir + `"},
-  "active": [],
-  "history": [
-    {
-      "timestamp": "2026-03-30T15:00:00Z",
-      "action": "install",
-      "resolved": [
-        {
-          "name": "root",
-          "version": "1.0.0",
-          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "reference": "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        }
-      ]
-    }
-  ]
-}`
-		if err := os.WriteFile(statePath, []byte(raw), 0o644); err != nil {
+		if err := writeInstallStateFixture(statePath, State{
+			SchemaVersion: SchemaVersion,
+			Target:        Target{Path: targetDir},
+			Active:        []ResolvedSkill{},
+			History: []HistoryEntry{
+				{
+					Timestamp: "2026-03-30T15:00:00Z",
+					Action:    "install",
+					Resolved: []ResolvedSkill{
+						{
+							Name:      "root",
+							Version:   "1.0.0",
+							Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+							Reference: "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+						},
+					},
+				},
+			},
+		}); err != nil {
 			t.Fatalf("WriteFile(bad state) error = %v", err)
 		}
 
@@ -886,45 +1089,44 @@ func TestRollback(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
 			t.Fatalf("MkdirAll(state dir) error = %v", err)
 		}
-		raw := `{
-  "schemaVersion": "v1",
-  "target": {"path": "` + targetDir + `"},
-  "active": [
-    {
-      "name": "root",
-      "version": "1.0.0",
-      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "reference": "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    }
-  ],
-  "history": [
-    {
-      "timestamp": "2026-03-30T16:00:00Z",
-      "action": "install",
-      "resolved": [
-        {
-          "name": "root",
-          "version": "2.0.0",
-          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "reference": "oci://registry.example.com/agentskills/root@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-        }
-      ]
-    },
-    {
-      "timestamp": "2026-03-30T15:00:00Z",
-      "action": "rollback",
-      "resolved": [
-        {
-          "name": "root",
-          "version": "1.0.0",
-          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "reference": "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        }
-      ]
-    }
-  ]
-}`
-		if err := os.WriteFile(statePath, []byte(raw), 0o644); err != nil {
+		if err := writeInstallStateFixture(statePath, State{
+			SchemaVersion: SchemaVersion,
+			Target:        Target{Path: targetDir},
+			Active: []ResolvedSkill{
+				{
+					Name:      "root",
+					Version:   "1.0.0",
+					Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					Reference: "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				},
+			},
+			History: []HistoryEntry{
+				{
+					Timestamp: "2026-03-30T16:00:00Z",
+					Action:    "install",
+					Resolved: []ResolvedSkill{
+						{
+							Name:      "root",
+							Version:   "2.0.0",
+							Digest:    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+							Reference: "oci://registry.example.com/agentskills/root@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+						},
+					},
+				},
+				{
+					Timestamp: "2026-03-30T15:00:00Z",
+					Action:    "rollback",
+					Resolved: []ResolvedSkill{
+						{
+							Name:      "root",
+							Version:   "1.0.0",
+							Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+							Reference: "oci://registry.example.com/agentskills/root@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+						},
+					},
+				},
+			},
+		}); err != nil {
 			t.Fatalf("WriteFile(bad state) error = %v", err)
 		}
 
@@ -1137,6 +1339,14 @@ func equalResolvedSets(left, right []ResolvedSkill) bool {
 		}
 	}
 	return true
+}
+
+func writeInstallStateFixture(path string, state State) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
 }
 
 func activeSkillVersion(t *testing.T, active []ResolvedSkill, name string) string {
