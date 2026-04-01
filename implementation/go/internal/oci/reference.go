@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
+	"oras.land/oras-go/v2/registry/remote"
 )
 
 func ParseReference(raw string) (Reference, error) {
@@ -31,6 +32,23 @@ func ParseReference(raw string) (Reference, error) {
 		Repository: repository,
 		Digest:     parsedDigest.String(),
 	}, nil
+}
+
+func ParsePersistedReference(raw string) (Reference, error) {
+	ref, err := ParseReference(raw)
+	if err != nil {
+		return Reference{}, err
+	}
+	if ref.Canonical() != raw {
+		return Reference{}, fmt.Errorf("reference %q is not canonical", raw)
+	}
+	if _, err := remote.NewRepository(ref.Repository); err != nil {
+		return Reference{}, fmt.Errorf("repository %q is not a valid OCI locator: %w", ref.Repository, err)
+	}
+	if strings.Contains(ref.Repository[strings.LastIndex(ref.Repository, "/")+1:], ":") {
+		return Reference{}, fmt.Errorf("reference %q must not include a tag-qualified repository name", raw)
+	}
+	return ref, nil
 }
 
 func normalizeRepository(raw string) (string, error) {

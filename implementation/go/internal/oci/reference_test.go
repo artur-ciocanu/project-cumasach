@@ -48,3 +48,32 @@ func TestParseReferenceRejectsNonSHA256Digest(t *testing.T) {
 		t.Fatal("ParseReference() error = nil, want error")
 	}
 }
+
+func TestParsePersistedReferenceAcceptsCanonicalDigestReference(t *testing.T) {
+	raw := "oci://registry.example.com/agentskills/list-directory@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	ref, err := ParsePersistedReference(raw)
+	if err != nil {
+		t.Fatalf("ParsePersistedReference() error = %v", err)
+	}
+
+	if got := ref.Canonical(); got != raw {
+		t.Fatalf("Canonical() = %q, want %q", got, raw)
+	}
+}
+
+func TestParsePersistedReferenceRejectsTagQualifiedRepositoryName(t *testing.T) {
+	raw := "oci://registry.example.com/agentskills/list-directory:1.2.3@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	if _, err := ParsePersistedReference(raw); err == nil {
+		t.Fatal("ParsePersistedReference() error = nil, want error")
+	}
+}
+
+func TestParsePersistedReferenceRejectsNonCanonicalRawString(t *testing.T) {
+	raw := "registry.example.com/agentskills/list-directory@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+
+	if _, err := ParsePersistedReference(raw); err == nil {
+		t.Fatal("ParsePersistedReference() error = nil, want error")
+	}
+}
