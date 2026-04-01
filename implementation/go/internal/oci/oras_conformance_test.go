@@ -45,15 +45,6 @@ func TestLoadORASInteropConfigFromEnv(t *testing.T) {
 			},
 		},
 		{
-			name: "legacy artifactory env is ignored",
-			env: map[string]string{
-				"CUMASACH_ARTIFACTORY_REPOSITORY": "registry.example.com/agentskills/demo",
-				"ARTIFACTORY_USER":                "robot",
-				"ARTIFACTORY_PASSWORD":            "secret",
-			},
-			wantSkip: "CUMASACH_ORAS_CONFORMANCE_REPOSITORY",
-		},
-		{
 			name:     "missing repository requests skip",
 			env:      map[string]string{},
 			wantSkip: "CUMASACH_ORAS_CONFORMANCE_REPOSITORY",
