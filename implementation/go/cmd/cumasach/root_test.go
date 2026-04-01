@@ -32,4 +32,24 @@ func TestRootHelp(t *testing.T) {
 			t.Fatalf("help output did not include %q command: %q", commandName, output)
 		}
 	}
+
+	for _, flagName := range []string{"--json", "--verbose", "--no-color"} {
+		if !strings.Contains(output, flagName) {
+			t.Fatalf("help output did not include %q flag: %q", flagName, output)
+		}
+	}
+
+	if strings.Contains(output, "completion") {
+		t.Fatalf("help output unexpectedly included completion command: %q", output)
+	}
+}
+
+func TestRootPersistentFlags(t *testing.T) {
+	cmd := newRootCmd()
+
+	for _, flagName := range []string{"json", "verbose", "no-color"} {
+		if cmd.PersistentFlags().Lookup(flagName) == nil {
+			t.Fatalf("persistent flag %q was not registered", flagName)
+		}
+	}
 }

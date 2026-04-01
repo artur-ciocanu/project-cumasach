@@ -89,6 +89,27 @@ func TestInstallRejectsConfigManifestMismatch(t *testing.T) {
 	}
 }
 
+func TestPrepareFetchedArtifactRejectsMalformedReference(t *testing.T) {
+	manifestBytes, err := os.ReadFile(filepath.Join(fixtureSkillDir(t), ".skill", "manifest.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(manifest) error = %v", err)
+	}
+
+	fetched := oci.FetchedArtifact{
+		Reference: "not-a-valid-reference",
+		Config:    manifestBytes,
+		Archive:   buildPackageBytes(t, fixtureSkillDir(t)),
+	}
+
+	_, err = prepareFetchedArtifact(fetched, t.TempDir())
+	if err == nil {
+		t.Fatal("prepareFetchedArtifact() error = nil, want malformed reference failure")
+	}
+	if !strings.Contains(err.Error(), "parse fetched artifact reference") {
+		t.Fatalf("prepareFetchedArtifact() error = %q, want malformed reference context", err)
+	}
+}
+
 func TestInstallUpgradeReplacesActiveDirectoryAndAppendsHistory(t *testing.T) {
 	registry := oci.NewMemoryRegistry()
 	targetDir := t.TempDir()
@@ -796,6 +817,10 @@ func TestInstallGraph(t *testing.T) {
 		targetDir := t.TempDir()
 
 		rootRef := pushSkill(t, registry, namedSkillDir(t, "root", "1.0.0", "# root\n", nil), "registry.example.com/agentskills/root")
+		rootParsedRef, err := oci.ParseReference(rootRef)
+		if err != nil {
+			t.Fatalf("ParseReference(rootRef) error = %v", err)
+		}
 		badArchive := buildPackageBytes(t, namedSkillDir(t, "child", "1.0.0", "# child\n", nil))
 		badConfig := []byte(`{"schemaVersion":"v1","packageType":"skill","name":"child","version":"9.9.9","skill":{"entrypoint":"SKILL.md"}}`)
 		badRef, err := oci.Push(context.Background(), registry, "registry.example.com/agentskills/child", badConfig, badArchive, oci.PushOptions{Tag: "1.0.0"})
@@ -810,7 +835,7 @@ func TestInstallGraph(t *testing.T) {
 					Name:      "root",
 					Version:   "1.0.0",
 					Reference: rootRef,
-					Digest:    mustParseReference(rootRef).Digest,
+					Digest:    rootParsedRef.Digest,
 				},
 				"child": {
 					Name:      "child",

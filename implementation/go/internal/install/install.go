@@ -193,6 +193,11 @@ func prepareGraphInstall(ctx context.Context, registry oci.Registry, targetDir s
 }
 
 func prepareFetchedArtifact(fetched oci.FetchedArtifact, targetDir string) (preparedArtifact, error) {
+	parsedRef, err := oci.ParseReference(fetched.Reference)
+	if err != nil {
+		return preparedArtifact{}, fmt.Errorf("parse fetched artifact reference: %w", err)
+	}
+
 	mirroredManifestBytes, mirroredManifest, err := archivepkg.ReadMirroredManifestTGZ(bytes.NewReader(fetched.Archive))
 	if err != nil {
 		return preparedArtifact{}, fmt.Errorf("read mirrored manifest from fetched archive: %w", err)
@@ -217,8 +222,8 @@ func prepareFetchedArtifact(fetched oci.FetchedArtifact, targetDir string) (prep
 		Resolved: ResolvedSkill{
 			Name:      mirroredManifest.Name,
 			Version:   mirroredManifest.Version,
-			Digest:    mustParseReference(fetched.Reference).Digest,
-			Reference: fetched.Reference,
+			Digest:    parsedRef.Digest,
+			Reference: parsedRef.Canonical(),
 		},
 	}, nil
 }
@@ -229,7 +234,11 @@ func prepareFetchedArtifactForSelected(fetched oci.FetchedArtifact, targetDir st
 		return preparedArtifact{}, err
 	}
 
-	expectedReference := mustParseReference(selected.Reference).Canonical()
+	expectedRef, err := oci.ParseReference(selected.Reference)
+	if err != nil {
+		return preparedArtifact{}, fmt.Errorf("parse selected package reference for %q: %w", selected.Name, err)
+	}
+	expectedReference := expectedRef.Canonical()
 	if artifact.Resolved.Reference != expectedReference {
 		return preparedArtifact{}, fmt.Errorf("fetched artifact %q does not match expected selected package %q reference %q", artifact.Resolved.Reference, selected.Name, expectedReference)
 	}
@@ -352,14 +361,6 @@ func nextRollbackState(previous State, selected []ResolvedSkill, timestamp time.
 		Active:        append([]ResolvedSkill(nil), selected...),
 		History:       history,
 	}, nil
-}
-
-func mustParseReference(raw string) oci.Reference {
-	ref, err := oci.ParseReference(raw)
-	if err != nil {
-		panic(err)
-	}
-	return ref
 }
 
 func graphFromResolvedSnapshot(snapshot []ResolvedSkill) (resolve.Graph, error) {
