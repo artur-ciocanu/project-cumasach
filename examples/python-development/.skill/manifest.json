@@ -32,8 +32,7 @@
     "os": [
       "darwin",
       "linux"
-    ],
-    "env": []
+    ]
   },
   "source": {
     "url": "https://example.com/skills/python-development",
