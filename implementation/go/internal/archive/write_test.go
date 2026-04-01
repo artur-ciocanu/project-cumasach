@@ -419,6 +419,129 @@ func TestWriteTGZRejectsSymlinksInSourceDirectory(t *testing.T) {
 	}
 }
 
+func TestReadManifestTGZRejectsSymlinkEntries(t *testing.T) {
+	archiveBytes := buildArchive(t,
+		tarEntry{
+			Name:     "list-directory/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/SKILL.md",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     []byte("# list-directory\n"),
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/manifest.json",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     mustManifestJSON(t, "list-directory"),
+		},
+		tarEntry{
+			Name:     "list-directory/references/linked.txt",
+			Typeflag: tar.TypeSymlink,
+			Mode:     0o644,
+		},
+	)
+
+	_, err := ReadManifestTGZ(bytes.NewReader(archiveBytes))
+	if err == nil {
+		t.Fatal("ReadManifestTGZ() error = nil, want symlink rejection failure")
+	}
+
+	if !strings.Contains(err.Error(), "links are not allowed") {
+		t.Fatalf("ReadManifestTGZ() error = %q, want 'links are not allowed' context", err)
+	}
+}
+
+func TestReadManifestTGZRejectsHardlinkEntries(t *testing.T) {
+	archiveBytes := buildArchive(t,
+		tarEntry{
+			Name:     "list-directory/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/SKILL.md",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     []byte("# list-directory\n"),
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/manifest.json",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     mustManifestJSON(t, "list-directory"),
+		},
+		tarEntry{
+			Name:     "list-directory/references/hardlinked.txt",
+			Typeflag: tar.TypeLink,
+			Mode:     0o644,
+		},
+	)
+
+	_, err := ReadManifestTGZ(bytes.NewReader(archiveBytes))
+	if err == nil {
+		t.Fatal("ReadManifestTGZ() error = nil, want hardlink rejection failure")
+	}
+
+	if !strings.Contains(err.Error(), "links are not allowed") {
+		t.Fatalf("ReadManifestTGZ() error = %q, want 'links are not allowed' context", err)
+	}
+}
+
+func TestExtractTGZTempRejectsHardlinkEntries(t *testing.T) {
+	archiveBytes := buildArchive(t,
+		tarEntry{
+			Name:     "list-directory/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/SKILL.md",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     []byte("# list-directory\n"),
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/",
+			Typeflag: tar.TypeDir,
+			Mode:     0o755,
+		},
+		tarEntry{
+			Name:     "list-directory/.skill/manifest.json",
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Body:     mustManifestJSON(t, "list-directory"),
+		},
+		tarEntry{
+			Name:     "list-directory/references/hardlinked.txt",
+			Typeflag: tar.TypeLink,
+			Mode:     0o644,
+		},
+	)
+
+	_, _, err := ExtractTGZTemp(bytes.NewReader(archiveBytes), t.TempDir())
+	if err == nil {
+		t.Fatal("ExtractTGZTemp() error = nil, want hardlink rejection failure")
+	}
+
+	if !strings.Contains(err.Error(), "links are not allowed") {
+		t.Fatalf("ExtractTGZTemp() error = %q, want 'links are not allowed' context", err)
+	}
+}
+
 type tarEntry struct {
 	Name     string
 	Typeflag byte
