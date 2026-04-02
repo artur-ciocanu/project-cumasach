@@ -1,256 +1,109 @@
 # Cumasach
 
-Cumasach defines an OCI-native packaging format for Agent Skills.
+**OCI-native packaging for Agent Skills.**
 
-The goal is to bring versioning, provenance, dependency resolution, rollback, and enterprise policy to skills without turning skills into containers. A Cumasach package contains skill content such as `SKILL.md`, scripts, references, and templates. It does not bundle host tools like `uv`, `node`, or `jq`.
+Agent skills are everywhere — Claude Code, Cursor, Copilot, Codex, OpenClaw — but distribution is still git clones and folder copies. No versioning beyond "whatever's on main." No dependency resolution. No provenance. A recent audit found that [66% of published skills have at least one security finding](https://dev.to/ecap0/the-state-of-mcp-server-security-in-2026-118-findings-across-68-packages-4fkd).
 
-The format is designed to:
+Cumasach brings the packaging infrastructure that every other software ecosystem already has. It implements the [Agent Skills specification](https://agentskills.io) and uses OCI registries you already run — GHCR, Artifactory, ECR — so there's nothing new to adopt for transport.
 
-- Package a single skill version as a `tar.gz`
-- Publish that package to an OCI registry
-- Preserve provenance and signatures
-- Resolve skill-to-skill dependencies
-- Materialize exactly one active version of each skill into a flat runtime skills directory
-- Work with stock OCI tooling such as `oras`
+## What you get
 
-The packaging standard uses a neutral `agentskills` namespace for OCI media types and schema identifiers so it can be adopted beyond a single project or CLI.
+| Problem | Today | With Cumasach |
+|---------|-------|---------------|
+| **Versioning** | Git refs or nothing | SemVer with digest-pinned artifacts |
+| **Dependencies** | Manual, undeclared | Declared in manifest, resolved on install |
+| **Reproducibility** | Hope the repo hasn't changed | Lockfiles freeze the exact dependency graph |
+| **Rollback** | `git revert` and pray | `cumasach rollback` restores previous state |
+| **Provenance** | Trust the author | Cryptographic verification of package integrity |
+| **Discovery** | Search GitHub | Query any OCI registry with standard tooling |
 
-## Status
-
-This repository now contains:
-
-- the v1 specification draft
-- JSON Schemas and examples
-- a Go reference CLI slice for `package`, `push`, `install`, `lock`, `rollback`, and `verify`, including `install --lockfile`
-
-## Repository Layout
-
-- `docs/spec/packaging-v1.md`: normative package, registry, dependency, lockfile, and install-state specification
-- `docs/spec/oci-conventions-v1.md`: OCI media types, registry layout, and ORAS transport conventions
-- `docs/spec/conformance-v1.md`: conformance requirements and test matrix
-- `docs/spec/cli-v1.md`: normative v1 CLI command surface and flag semantics
-- `schemas/skill-manifest-v1.schema.json`: JSON Schema for `.skill/manifest.json`
-- `schemas/skill-lock-v1.schema.json`: JSON Schema for lockfiles
-- `schemas/install-state-v1.schema.json`: JSON Schema for local install state
-- `examples/list-directory`: public demo skill used in the CLI walkthrough
-- `examples/workspace-notes`: tiny dependency demo skill
-- `examples/workspace-summary`: tiny root demo skill with required dependencies
-- `examples/python-development`: example skill package layout
-- `examples/oras`: example ORAS commands for publishing and pulling skill artifacts
-- `implementation/go`: Go reference implementation of the current CLI slice
-
-## Core Model
-
-A Cumasach-compliant publisher produces:
-
-1. A skill directory payload containing `SKILL.md` and related files
-2. A mirrored offline manifest at `.skill/manifest.json`
-3. A `tar.gz` of that directory
-4. An OCI artifact whose config blob contains the canonical manifest metadata
-
-Runtimes such as OpenClaw continue to read a flat skills directory. Cumasach sits in front of the runtime as the packaging, resolution, verification, and activation layer.
-
-## OCI Interoperability
-
-The format is intentionally OCI-native. A valid Cumasach artifact must be pushable and pullable with stock `oras`.
-
-`cumasach` as a CLI is expected to add skill-aware behavior on top of OCI transport:
-
-- `package`
-- `push`
-- `install`
-- `lock`
-- `rollback`
-- `verify`
-
-## ORAS Conformance Check
-
-`go test ./...` is not sufficient release evidence for transport conformance by itself. Release sign-off requires one successful stock-`oras` round-trip against a real registry, and `scripts/run-oras-conformance.sh` is the supported and canonical entrypoint for that proof.
-
-The Go reference implementation includes a stock-`oras` round-trip conformance test against a real registry.
-
-Set these environment variables:
+## Quick start
 
 ```bash
-export CUMASACH_ORAS_CONFORMANCE_REPOSITORY=registry.example.com/agentskills/conformance
-export CUMASACH_ORAS_CONFORMANCE_USERNAME=robot
-export CUMASACH_ORAS_CONFORMANCE_PASSWORD=secret
-# optional for HTTP-only test registries
-export CUMASACH_ORAS_CONFORMANCE_PLAIN_HTTP=1
+# Package a skill directory
+cumasach package ./my-skill --files-sha256
+
+# Push to your registry
+cumasach push ./dist/my-skill-1.0.0.tgz ghcr.io/my-org/skills/my-skill
+
+# Install it anywhere
+cumasach install oci://ghcr.io/my-org/skills/my-skill@sha256:... --target ./skills
 ```
 
-Then run the canonical release-gate command from the repo root:
+> Cumasach doesn't have prebuilt binaries yet. See [Building from source](#building-from-source) for how to run the CLI from the Go module.
+
+The result is a flat directory that any agent runtime reads as-is. Claude Code, Cursor, OpenClaw — they all expect a skills folder with `SKILL.md` files. Cumasach materializes exactly that. It sits in front of the runtime as the packaging and verification layer. It doesn't change how skills work. It changes how they ship.
+
+## Dependency resolution
+
+Install a skill and Cumasach resolves its full dependency tree into a flat runtime directory:
 
 ```bash
-bash scripts/run-oras-conformance.sh
+cumasach install workspace-summary \
+  --from ghcr.io/my-org/skills \
+  --target ./skills
 ```
 
-Before running the helper, the exact repo root or worktree root that you will invoke `scripts/run-oras-conformance.sh` from must already be trusted so `mise exec --` can load the pinned toolchain. Change into that same root and run:
-
-```bash
-mise trust
 ```
-
-The helper script is the canonical and supported way to run the release-gating proof. It self-wraps through `mise exec --` so both `go` and the test's `oras` subprocess come from the pinned toolchain in `mise.toml`. It fails fast with a targeted trust message when that exact repo/worktree root is still untrusted. The supported interface is the `CUMASACH_ORAS_CONFORMANCE_*` environment-variable set documented above.
-
-The script runs only:
-
-```bash
-cd implementation/go
-mise exec -- go test ./internal/oci -run '^TestORASConformanceRoundTrip$' -count=1
-```
-
-It exits non-zero when required credentials are missing or when the test fails.
-
-## Reference CLI
-
-The current Go reference implementation lives in `implementation/go`.
-
-The implemented vertical slice is:
-
-- `cumasach package <skill-dir>`
-- `cumasach push <package.tgz> <oci-repo> [--tag <tag>]`
-- `cumasach lock <artifact-ref|package-name> [--from <oci-base>] [--output <file>]`
-- `cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>] [--lockfile <file>]`
-- `cumasach install --lockfile <file> --target <skills-dir>`
-- `cumasach rollback --target <skills-dir>`
-- `cumasach verify <package.tgz|artifact-ref>`
-
-Current limitations:
-
-- dependency resolution currently covers required dependencies only
-
-## Quick Start
-
-Install the repo-managed toolchain:
-
-```bash
-mise install
-```
-
-Run the CLI from the Go module:
-
-```bash
-cd implementation/go
-mise exec -- go run ./cmd/cumasach --help
-```
-
-### Demo Skills
-
-The public demo skills are:
-
-- `examples/list-directory`
-- `examples/workspace-notes`
-- `examples/workspace-summary`
-
-Package it:
-
-```bash
-cd implementation/go
-mise exec -- go run ./cmd/cumasach package ../../examples/list-directory --files-sha256
-```
-
-That writes:
-
-```text
-implementation/go/dist/list-directory-1.2.3.tgz
-```
-
-Push it to an OCI registry:
-
-```bash
-cd implementation/go
-mise exec -- go run ./cmd/cumasach push ./dist/list-directory-1.2.3.tgz registry.example.com/agentskills/list-directory
-```
-
-The command prints a canonical digest-pinned artifact reference like:
-
-```text
-oci://registry.example.com/agentskills/list-directory@sha256:...
-```
-
-Install that exact artifact into a flat runtime-visible skills directory:
-
-```bash
-cd implementation/go
-mise exec -- go run ./cmd/cumasach install oci://registry.example.com/agentskills/list-directory@sha256:... --target /tmp/cumasach-skills
-```
-
-On success the target contains:
-
-```text
-/tmp/cumasach-skills/
-  list-directory/
-  .cumasach/install-state.json
-```
-
-The runtime-visible skill entry remains flat:
-
-- `/tmp/cumasach-skills/list-directory`
-
-The hidden `.cumasach/` directory is CLI metadata, not runtime-facing skill content.
-
-Installing with Cumasach is non-destructive with respect to unrelated pre-existing skills already present in the target directory. The CLI manages and records the skills it installs, but it does not delete unrelated user-provided skill directories just because they are outside the current install request or lockfile.
-
-### Dependency-Aware Install
-
-The CLI can also resolve required dependencies from a repository base.
-
-Package and push the tiny dependency demo:
-
-```bash
-cd implementation/go
-mise exec -- go run ./cmd/cumasach package ../../examples/list-directory --files-sha256
-mise exec -- go run ./cmd/cumasach package ../../examples/workspace-notes --files-sha256
-mise exec -- go run ./cmd/cumasach package ../../examples/workspace-summary --files-sha256
-mise exec -- go run ./cmd/cumasach push ./dist/list-directory-1.2.3.tgz registry.example.com/agentskills/list-directory
-mise exec -- go run ./cmd/cumasach push ./dist/workspace-notes-1.0.0.tgz registry.example.com/agentskills/workspace-notes
-mise exec -- go run ./cmd/cumasach push ./dist/workspace-summary-1.0.0.tgz registry.example.com/agentskills/workspace-summary
-```
-
-Then install the root skill by package name into a fresh target directory:
-
-```bash
-cd implementation/go
-mise exec -- go run ./cmd/cumasach install workspace-summary --from registry.example.com/agentskills --target /tmp/cumasach-skills-deps
-```
-
-On success the target contains one flat directory per active skill plus install metadata:
-
-```text
-/tmp/cumasach-skills-deps/
+./skills/
   list-directory/
   workspace-notes/
   workspace-summary/
   .cumasach/install-state.json
 ```
 
-### Lockfile Workflow
+### Lockfile workflow
 
-You can also freeze the resolved graph and install it later without live re-resolution:
-
-```bash
-cd implementation/go
-mise exec -- go run ./cmd/cumasach lock workspace-summary --from registry.example.com/agentskills --output ./skill.lock.json
-mise exec -- go run ./cmd/cumasach install --lockfile ./skill.lock.json --target /tmp/cumasach-skills-locked
-```
-
-Mixed form is also supported for explicit root validation:
+Freeze the resolved graph, install later without live re-resolution:
 
 ```bash
-cd implementation/go
-mise exec -- go run ./cmd/cumasach install workspace-summary --from registry.example.com/agentskills --lockfile ./skill.lock.json --target /tmp/cumasach-skills-locked
+cumasach lock workspace-summary --from ghcr.io/my-org/skills --output skill.lock.json
+cumasach install --lockfile skill.lock.json --target ./skills
 ```
 
-In lockfile mode:
+## Design decisions
 
-- the requested root, if provided, must match the lockfile root
-- `--from` is only used for package-name root validation and does not affect fetch selection
-- installs fetch exactly the digest-pinned artifacts recorded in the lockfile
+**Spec-first, not CLI-first.** This repository contains normative specifications, JSON Schemas, and conformance tests. The Go CLI is a reference implementation — the spec is the product. If someone wants to build a Rust or Python implementation, the spec should be sufficient.
 
-## Non-Goals
+**Builds on what exists.** OCI registries are battle-tested infrastructure with authentication, access control, replication, and audit logging. Dependency version constraints use Helm-compatible SemVer syntax. A Cumasach package is a standard OCI artifact, pushable and pullable with stock [ORAS](https://oras.land/) tooling. Less to learn, less to break.
+
+**Strict v1 schema.** `additionalProperties: false` everywhere. Extensibility goes through the explicit `metadata` field, not through loose schema validation. The schema can loosen in v2; it can never tighten.
+
+**Neutral namespace.** OCI media types and schema identifiers use `agentskills`, not `cumasach`. The format is designed to be adopted beyond a single project.
+
+**No bundled runtimes.** Packages contain skill content — `SKILL.md`, scripts, references, templates. The `requirements` field declares what the host needs, but the package doesn't ship it.
+
+## Status
+
+This repository contains:
+
+- The v1 specification draft
+- JSON Schemas and examples
+- A Go reference CLI for `package`, `push`, `install`, `lock`, `rollback`, and `verify`
+- ORAS conformance tests validated against GHCR and JFrog Artifactory
+
+Current limitations: dependency resolution covers required dependencies only. Optional dependencies and version-range resolution are planned but not yet implemented.
+
+## Repository layout
+
+| Path | Description |
+|------|-------------|
+| `docs/spec/` | Normative v1 specifications (packaging, OCI conventions, conformance, CLI) |
+| `schemas/` | JSON Schemas for manifest, lockfile, and install state |
+| `examples/` | Demo skill packages including dependency chains |
+| `implementation/go/` | Go reference implementation |
+
+## Building from source
+
+```bash
+mise install
+cd implementation/go
+mise exec -- go run ./cmd/cumasach --help
+```
+
+## Non-goals
 
 - Bundling language runtimes or host binaries
 - Defining container execution environments
-- Replacing the Agent Skills execution model
+- Replacing the agent skills execution model
 - Requiring runtimes to understand OCI directly
