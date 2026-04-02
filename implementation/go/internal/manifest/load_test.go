@@ -121,6 +121,31 @@ func TestLoadReaderUsesEmbeddedSchemaAtRuntime(t *testing.T) {
 	}
 }
 
+func TestLoadReaderParsesLicenseAndMetadata(t *testing.T) {
+	input := `{
+  "schemaVersion": "v1",
+  "packageType": "skill",
+  "name": "test-skill",
+  "version": "1.0.0",
+  "skill": {"entrypoint": "SKILL.md"},
+  "license": "MIT",
+  "metadata": {"io.openclaw.category": "productivity"}
+}`
+	loaded, err := LoadReader(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("LoadReader() error = %v", err)
+	}
+	if loaded.License != "MIT" {
+		t.Fatalf("License = %q, want %q", loaded.License, "MIT")
+	}
+	if loaded.Metadata == nil {
+		t.Fatal("Metadata = nil, want non-nil map")
+	}
+	if loaded.Metadata["io.openclaw.category"] != "productivity" {
+		t.Fatalf("Metadata[io.openclaw.category] = %v, want %q", loaded.Metadata["io.openclaw.category"], "productivity")
+	}
+}
+
 func testdataPath(t *testing.T, relative string) string {
 	t.Helper()
 
