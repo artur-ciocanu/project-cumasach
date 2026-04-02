@@ -2,7 +2,7 @@
 
 **OCI-native packaging for Agent Skills.**
 
-Agent skills are everywhere — Claude Code, Cursor, Copilot, Codex, OpenClaw — but distribution is still git clones and folder copies. No versioning beyond "whatever's on main." No dependency resolution. No provenance. A recent audit found that [66% of published skills have at least one security finding](https://dev.to/ecap0/the-state-of-mcp-server-security-in-2026-118-findings-across-68-packages-4fkd).
+Agent skills are everywhere — Claude Code, Cursor, Copilot, Codex, OpenClaw — but distribution is still git clones and folder copies. No versioning beyond "whatever's on main." No dependency resolution. No provenance. Security audits routinely surface critical findings — command injection, credential exposure, excessive permissions — across the ecosystem.
 
 Cumasach brings the packaging infrastructure that every other software ecosystem already has. It implements the [Agent Skills specification](https://agentskills.io) and uses OCI registries you already run — GHCR, Artifactory, ECR — so there's nothing new to adopt for transport.
 
@@ -94,6 +94,8 @@ Current limitations: dependency resolution covers required dependencies only. Op
 | `implementation/go/` | Go reference implementation |
 
 ## Building from source
+
+Install the repo-managed toolchain, then run the CLI from the Go module:
 
 ```bash
 mise install
