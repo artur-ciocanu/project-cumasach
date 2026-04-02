@@ -23,6 +23,8 @@ This specification does not define:
 - how host tools such as `uv`, `node`, or `jq` are installed
 - container or sandbox execution environments
 
+The `agentskills` namespace used in schema identifiers and OCI media types is chosen for ecosystem interoperability. It does not imply endorsement by, affiliation with, or coordination with any external project or organization using the `agentskills` name.
+
 ## 2. Conformance Language
 
 The key words `MUST`, `MUST NOT`, `REQUIRED`, `SHOULD`, `SHOULD NOT`, and `MAY` in this document are to be interpreted as described in RFC 2119 and RFC 8174.
@@ -205,7 +207,15 @@ In v1, `entrypoint` MUST be `"SKILL.md"`.
 
 `description` is OPTIONAL and SHOULD be a short human-readable summary.
 
-### 7.7 Dependencies
+### 7.7 License
+
+`license` is OPTIONAL.
+
+If present, `license` MUST be a valid SPDX license expression as defined by the SPDX specification. Examples: `"MIT"`, `"Apache-2.0"`, `"MIT OR Apache-2.0"`.
+
+Publishers SHOULD include `license` so that compliance tooling can evaluate license terms from the OCI config blob without extracting the package payload.
+
+### 7.8 Dependencies
 
 `dependencies` is OPTIONAL.
 
@@ -214,7 +224,7 @@ If present, each dependency object MUST contain:
 - `name`
 - `version`
 
-#### 7.7.1 Constraint language
+#### 7.8.1 Constraint language
 
 Dependency `version` values MUST use the Helm-compatible SemVer constraint language used for chart dependencies.
 
@@ -246,7 +256,7 @@ Consumers MUST reject unsupported operators or shorthand forms rather than attem
 
 JSON Schema validation alone does not fully validate this constraint grammar in v1. Consumers MUST perform semantic validation of dependency constraint strings in addition to schema validation.
 
-#### 7.7.2 Dependency semantics
+#### 7.8.2 Dependency semantics
 
 Each listed dependency is required.
 
@@ -254,7 +264,7 @@ The consumer MUST include exactly one compatible version of each listed dependen
 
 If no compatible version can be resolved for any listed dependency, installation MUST fail.
 
-### 7.8 Requirements
+### 7.9 Requirements
 
 `requirements` is OPTIONAL.
 
@@ -274,7 +284,7 @@ If present:
 
 Requirements are declarative only. A package MUST NOT bundle the referenced host binaries as part of v1 semantics.
 
-### 7.9 Source and publisher
+### 7.10 Source and publisher
 
 `source` and `publisher` are OPTIONAL metadata objects intended for provenance, policy, and discovery.
 
@@ -290,6 +300,16 @@ If present, `publisher` MUST NOT contain additional fields in v1.
 If present, `publisher` MAY include:
 
 - `name`: a non-empty human-readable publisher name
+
+### 7.11 Metadata
+
+`metadata` is OPTIONAL.
+
+If present, `metadata` MUST be a JSON object. Values MAY be any valid JSON type.
+
+Publishers SHOULD use reverse-DNS keys to namespace vendor-specific or ecosystem-specific extensions and avoid collisions. For example, `io.openclaw.category` or `io.agentskills.tags`.
+
+Consumers MUST NOT reject a package because `metadata` contains unrecognized keys.
 
 ## 8. Integrity Files
 
