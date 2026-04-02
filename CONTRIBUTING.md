@@ -22,7 +22,7 @@ The repository includes demo skills for testing the full workflow:
 - `examples/list-directory`
 - `examples/workspace-notes`
 - `examples/workspace-summary`
-- `examples/python-development`
+- `examples/python-development` (layout example, not used in walkthroughs below)
 
 ### Package, push, and install walkthrough
 
