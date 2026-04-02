@@ -22,6 +22,7 @@ The repository includes demo skills for testing the full workflow:
 - `examples/list-directory`
 - `examples/workspace-notes`
 - `examples/workspace-summary`
+- `examples/python-development`
 
 ### Package, push, and install walkthrough
 
@@ -34,13 +35,13 @@ mise exec -- go run ./cmd/cumasach package ../../examples/list-directory --files
 
 This writes `implementation/go/dist/list-directory-1.2.3.tgz`.
 
-Push to an OCI registry:
+Push to an OCI registry (from `implementation/go`):
 
 ```bash
 mise exec -- go run ./cmd/cumasach push ./dist/list-directory-1.2.3.tgz registry.example.com/agentskills/list-directory
 ```
 
-Install into a flat runtime directory:
+Install into a flat runtime directory (from `implementation/go`):
 
 ```bash
 mise exec -- go run ./cmd/cumasach install oci://registry.example.com/agentskills/list-directory@sha256:... --target /tmp/cumasach-skills
@@ -88,6 +89,12 @@ In lockfile mode:
 
 Release sign-off requires a stock-`oras` round-trip against a real registry. `scripts/run-oras-conformance.sh` is the canonical entrypoint.
 
+Trust the repo root for mise (required before first run):
+
+```bash
+mise trust
+```
+
 Set these environment variables:
 
 ```bash
@@ -96,12 +103,6 @@ export CUMASACH_ORAS_CONFORMANCE_USERNAME=robot
 export CUMASACH_ORAS_CONFORMANCE_PASSWORD=secret
 # optional for HTTP-only test registries
 export CUMASACH_ORAS_CONFORMANCE_PLAIN_HTTP=1
-```
-
-Trust the repo root for mise:
-
-```bash
-mise trust
 ```
 
 Run the conformance check:
