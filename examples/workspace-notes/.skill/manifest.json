@@ -4,7 +4,11 @@
   "name": "workspace-notes",
   "version": "1.0.0",
   "description": "Collects short workspace notes.",
+  "license": "MIT",
   "skill": {
     "entrypoint": "SKILL.md"
+  },
+  "metadata": {
+    "io.openclaw.category": "productivity"
   }
 }
