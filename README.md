@@ -1,6 +1,9 @@
-# Cumasach
+<h1 align="center">Cumasach</h1>
 
-*Cumasach* (pronounced **KUM-uh-sahk**) is the Irish word for "capable" or "powerful," from *cumas* meaning capability. A fitting name for a tool that makes agent skills production-capable.
+<p align="center">
+  <em>Cumasach</em> (pronounced <strong>KUM-uh-sahk</strong>) is the Irish word for "capable" or "powerful,"<br>
+  from <em>cumas</em> meaning capability. A fitting name for a tool that makes agent skills production-capable.
+</p>
 
 **OCI-native packaging for Agent Skills.**
 
