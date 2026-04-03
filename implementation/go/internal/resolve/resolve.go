@@ -217,9 +217,7 @@ func (r *packageResolver) pruneUnreachable(root string) {
 			continue
 		}
 		reachable[name] = struct{}{}
-		for _, dep := range r.edges[name] {
-			stack = append(stack, dep)
-		}
+		stack = append(stack, r.edges[name]...)
 	}
 
 	for name := range r.selected {

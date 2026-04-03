@@ -68,7 +68,7 @@ func TestPackageCommandUsesDefaultOutputPath(t *testing.T) {
 	if err := os.Chdir(cwd); err != nil {
 		t.Fatalf("Chdir() error = %v", err)
 	}
-	defer os.Chdir(originalWD)
+	defer func() { _ = os.Chdir(originalWD) }()
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -143,7 +143,7 @@ func readTGZEntries(t *testing.T, archiveBytes []byte) map[string][]byte {
 			t.Fatalf("tarReader.Next() error = %v", err)
 		}
 
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		if header.Typeflag != tar.TypeReg {
 			continue
 		}
 

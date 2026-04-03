@@ -311,17 +311,6 @@ func TestInstallCommandLockfileMode(t *testing.T) {
 	})
 }
 
-func pushFixtureArtifact(t *testing.T, registry oci.Registry) string {
-	t.Helper()
-
-	packagePath := buildFixturePackage(t)
-	ref, err := pushPackage(t.Context(), registry, packagePath, "registry.example.com/agentskills/list-directory", "")
-	if err != nil {
-		t.Fatalf("pushPackage() error = %v", err)
-	}
-	return ref
-}
-
 func pushCommandSkill(t *testing.T, registry oci.Registry, name, version string, dependencies []manifestpkg.Dependency) string {
 	t.Helper()
 	return pushCommandSkillToRepository(t, registry, "registry.example.com/agentskills/"+name, name, version, dependencies)

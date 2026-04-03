@@ -107,7 +107,7 @@ func readArchiveEntries(t *testing.T, archiveBytes []byte) map[string][]byte {
 			t.Fatalf("tarReader.Next() error = %v", err)
 		}
 
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		if header.Typeflag != tar.TypeReg {
 			continue
 		}
 
