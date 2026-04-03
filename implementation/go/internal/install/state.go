@@ -125,7 +125,7 @@ func WriteState(targetDir string, state State) error {
 	}()
 
 	if _, err := tempFile.Write(data); err != nil {
-		tempFile.Close()
+		_ = tempFile.Close()
 		return fmt.Errorf("write install state: %w", err)
 	}
 	if err := tempFile.Close(); err != nil {

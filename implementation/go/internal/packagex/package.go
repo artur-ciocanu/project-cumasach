@@ -26,7 +26,7 @@ func BuildTGZ(w io.Writer, sourceDir string, options BuildOptions) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(filepath.Dir(stagingDir))
+	defer func() { _ = os.RemoveAll(filepath.Dir(stagingDir)) }()
 
 	if !options.IncludeFilesSHA256 {
 		if _, err := filesha256.Validate(stagingDir); err != nil {
@@ -74,7 +74,7 @@ func stageSkillDir(sourceDir, packageName string) (string, error) {
 
 	destRoot := filepath.Join(parentDir, packageName)
 	if err := copyTree(sourceDir, destRoot); err != nil {
-		os.RemoveAll(parentDir)
+		_ = os.RemoveAll(parentDir)
 		return "", err
 	}
 

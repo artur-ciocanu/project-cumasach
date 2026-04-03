@@ -41,20 +41,20 @@ func WriteTGZ(w io.Writer, sourceDir string, expected manifest.Manifest) error {
 	if err != nil {
 		return fmt.Errorf("create gzip writer: %w", err)
 	}
-	gzipWriter.Header.ModTime = unixEpoch
-	gzipWriter.Header.OS = 255
+	gzipWriter.ModTime = unixEpoch
+	gzipWriter.OS = 255
 
 	tarWriter := tar.NewWriter(gzipWriter)
 	for _, entry := range entries {
 		if err := writeEntry(tarWriter, sourceDir, entry); err != nil {
-			tarWriter.Close()
-			gzipWriter.Close()
+			_ = tarWriter.Close()
+			_ = gzipWriter.Close()
 			return err
 		}
 	}
 
 	if err := tarWriter.Close(); err != nil {
-		gzipWriter.Close()
+		_ = gzipWriter.Close()
 		return fmt.Errorf("close tar writer: %w", err)
 	}
 
@@ -142,7 +142,7 @@ func writeEntry(tarWriter *tar.Writer, sourceDir, currentPath string) error {
 	if err != nil {
 		return fmt.Errorf("open %q: %w", currentPath, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	if _, err := io.Copy(tarWriter, file); err != nil {
 		return fmt.Errorf("write tar body %q: %w", currentPath, err)

@@ -35,7 +35,7 @@ func ExtractTGZTemp(r io.Reader, parentDir string) (string, manifest.Manifest, e
 			}
 
 			if _, err := io.Copy(file, reader); err != nil {
-				file.Close()
+				_ = file.Close()
 				return fmt.Errorf("write file %q: %w", targetPath, err)
 			}
 
@@ -47,7 +47,7 @@ func ExtractTGZTemp(r io.Reader, parentDir string) (string, manifest.Manifest, e
 		return nil
 	})
 	if err != nil {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 		return "", manifest.Manifest{}, err
 	}
 
