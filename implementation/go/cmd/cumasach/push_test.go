@@ -39,7 +39,7 @@ func TestPushCommandPushesPackageAndPrintsCanonicalReference(t *testing.T) {
 
 			packagePath := buildFixturePackage(t)
 
-			cmd := newRootCmd()
+			cmd := newRootCmd("test", "abc1234", "2026-01-01")
 			var stdout bytes.Buffer
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stdout)
@@ -78,7 +78,7 @@ func TestPushCommandUsesExplicitTag(t *testing.T) {
 
 	packagePath := buildFixturePackage(t)
 
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
@@ -103,7 +103,7 @@ func TestPushCommandFailsForMissingArchive(t *testing.T) {
 	restore := swapPushRegistry(t, registry)
 	defer restore()
 
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
@@ -136,7 +136,7 @@ func TestPushCommandFailsForSemanticallyInvalidManifest(t *testing.T) {
   "dependencies": [{"name": "child", "version": "1.2"}]
 }`))
 
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)

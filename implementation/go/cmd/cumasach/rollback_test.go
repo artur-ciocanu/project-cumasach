@@ -38,7 +38,7 @@ func TestRollbackCommand(t *testing.T) {
 			"--target", targetDir,
 		)
 
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -67,7 +67,7 @@ func TestRollbackCommand(t *testing.T) {
 	})
 
 	t.Run("missing target fails", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)

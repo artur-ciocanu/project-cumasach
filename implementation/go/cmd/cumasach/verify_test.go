@@ -15,7 +15,7 @@ func TestVerifyCommand(t *testing.T) {
 	t.Run("verify package archive succeeds", func(t *testing.T) {
 		archivePath := buildNamedPackage(t, "list-directory", "1.2.3", nil)
 
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -40,7 +40,7 @@ func TestVerifyCommand(t *testing.T) {
 			t.Fatalf("Rename() error = %v", err)
 		}
 
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -65,7 +65,7 @@ func TestVerifyCommand(t *testing.T) {
 			t.Fatalf("pushPackage() error = %v", err)
 		}
 
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -80,7 +80,7 @@ func TestVerifyCommand(t *testing.T) {
 	})
 
 	t.Run("malformed artifact-like input returns parse error", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -99,7 +99,7 @@ func TestVerifyCommand(t *testing.T) {
 	})
 
 	t.Run("explicit OCI tgz-like input returns OCI validation error", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -118,7 +118,7 @@ func TestVerifyCommand(t *testing.T) {
 	})
 
 	t.Run("tag-qualified digest reference returns OCI validation error", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -137,7 +137,7 @@ func TestVerifyCommand(t *testing.T) {
 	})
 
 	t.Run("malformed plain OCI-like input returns parse error", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -156,7 +156,7 @@ func TestVerifyCommand(t *testing.T) {
 	})
 
 	t.Run("plain malformed locator without path returns OCI validation error", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -175,7 +175,7 @@ func TestVerifyCommand(t *testing.T) {
 	})
 
 	t.Run("plain tag-style OCI-looking input returns OCI validation error", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -194,7 +194,7 @@ func TestVerifyCommand(t *testing.T) {
 	})
 
 	t.Run("plain empty-digest OCI-looking input returns OCI validation error", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -213,7 +213,7 @@ func TestVerifyCommand(t *testing.T) {
 	})
 
 	t.Run("missing argument fails", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)

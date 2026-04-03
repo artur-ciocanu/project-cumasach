@@ -23,7 +23,7 @@ func TestInstallCommandInstallsArtifactAndDependenciesIntoTarget(t *testing.T) {
 	ref := pushCommandSkillToRepository(t, registry, "registry.example.com/published/root-artifact", "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
 	targetDir := t.TempDir()
 
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
@@ -58,7 +58,7 @@ func TestInstallCommandExactArtifactWithDependenciesRequiresFrom(t *testing.T) {
 
 	ref := pushCommandSkillToRepository(t, registry, "registry.example.com/published/root-artifact", "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
 
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
@@ -78,7 +78,7 @@ func TestInstallCommandExactArtifactWithDependenciesRequiresFrom(t *testing.T) {
 }
 
 func TestInstallCommandPackageNameRequiresFrom(t *testing.T) {
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
@@ -106,7 +106,7 @@ func TestInstallCommandResolvesPackageNameDependenciesFromBase(t *testing.T) {
 	pushCommandSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
 
 	targetDir := t.TempDir()
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
@@ -132,7 +132,7 @@ func TestInstallCommandSurfacesUnresolvedDependencyFailures(t *testing.T) {
 
 	pushCommandSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "missing", Version: "^1.0.0"}})
 
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
@@ -153,7 +153,7 @@ func TestInstallCommandSurfacesUnresolvedDependencyFailures(t *testing.T) {
 }
 
 func TestInstallCommandRequiresTarget(t *testing.T) {
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
@@ -172,7 +172,7 @@ func TestInstallCommandRequiresTarget(t *testing.T) {
 }
 
 func TestInstallCommandRejectsMalformedArtifactReference(t *testing.T) {
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
@@ -204,7 +204,7 @@ func TestInstallCommandLockfileMode(t *testing.T) {
 
 	t.Run("lockfile only uses lockfile root", func(t *testing.T) {
 		targetDir := t.TempDir()
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -225,7 +225,7 @@ func TestInstallCommandLockfileMode(t *testing.T) {
 	})
 
 	t.Run("package name mixed form requires from and matching root name", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -246,7 +246,7 @@ func TestInstallCommandLockfileMode(t *testing.T) {
 	})
 
 	t.Run("package name mixed form rejects root mismatch", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -268,7 +268,7 @@ func TestInstallCommandLockfileMode(t *testing.T) {
 	})
 
 	t.Run("artifact reference mixed form rejects canonical root mismatch", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -289,7 +289,7 @@ func TestInstallCommandLockfileMode(t *testing.T) {
 	})
 
 	t.Run("package name mixed form rejects repository mismatch", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -345,7 +345,7 @@ func writeLockfileForRoot(t *testing.T, registry oci.Registry, reference, from s
 	restore := swapLockRegistry(t, registry)
 	defer restore()
 
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)

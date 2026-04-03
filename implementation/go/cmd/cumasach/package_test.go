@@ -12,7 +12,7 @@ import (
 )
 
 func TestPackageCommandBuildsArchiveWithFilesSHA256(t *testing.T) {
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 
 	skillDir := fixtureSkillDir(t)
@@ -43,7 +43,7 @@ func TestPackageCommandBuildsArchiveWithFilesSHA256(t *testing.T) {
 }
 
 func TestPackageCommandUsesDefaultOutputPath(t *testing.T) {
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 
 	cwd := t.TempDir()
@@ -80,7 +80,7 @@ func TestPackageCommandUsesDefaultOutputPath(t *testing.T) {
 }
 
 func TestPackageCommandFailurePreservesExistingOutputFile(t *testing.T) {
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 
 	outputPath := filepath.Join(t.TempDir(), "list-directory.tgz")

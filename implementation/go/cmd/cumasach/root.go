@@ -1,16 +1,21 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
 
-func newRootCmd() *cobra.Command {
+	"github.com/spf13/cobra"
+)
+
+func newRootCmd(version, commit, date string) *cobra.Command {
 	var jsonOutput bool
 	var verbose bool
 	var noColor bool
 
 	cmd := &cobra.Command{
-		Use:   "cumasach",
-		Short: "Reference CLI for the Cumasach packaging specification",
-		Args:  cobra.NoArgs,
+		Use:     "cumasach",
+		Short:   "Reference CLI for the Cumasach packaging specification",
+		Version: fmt.Sprintf("%s (%s, %s)", version, commit, date),
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help()
 		},

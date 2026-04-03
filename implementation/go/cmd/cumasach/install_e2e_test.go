@@ -110,7 +110,7 @@ func TestInstallCommandEndToEndFailsWhenDependencyOnlyHasNonSemverTags(t *testin
 	pushSkillWithCLI(t, childPackage, "registry.example.com/agentskills/workspace-notes", "--tag", "latest")
 	pushSkillWithCLI(t, rootPackage, "registry.example.com/agentskills/workspace-summary")
 
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
@@ -237,7 +237,7 @@ func pushSkillWithCLI(t *testing.T, packagePath, repository string, extraArgs ..
 func runRootCommand(t *testing.T, args ...string) string {
 	t.Helper()
 
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
