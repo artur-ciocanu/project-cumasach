@@ -24,7 +24,7 @@ func ExtractTGZTemp(r io.Reader, parentDir string) (string, manifest.Manifest, e
 			if err := os.MkdirAll(targetPath, 0o755); err != nil {
 				return fmt.Errorf("create directory %q: %w", targetPath, err)
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 				return fmt.Errorf("create parent directory for %q: %w", targetPath, err)
 			}
@@ -35,7 +35,7 @@ func ExtractTGZTemp(r io.Reader, parentDir string) (string, manifest.Manifest, e
 			}
 
 			if _, err := io.Copy(file, reader); err != nil {
-				file.Close()
+				_ = file.Close()
 				return fmt.Errorf("write file %q: %w", targetPath, err)
 			}
 
@@ -47,7 +47,7 @@ func ExtractTGZTemp(r io.Reader, parentDir string) (string, manifest.Manifest, e
 		return nil
 	})
 	if err != nil {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 		return "", manifest.Manifest{}, err
 	}
 

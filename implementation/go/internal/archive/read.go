@@ -49,7 +49,7 @@ func inspectArchive(r io.Reader, onFile func(header *tar.Header, reader io.Reade
 	if err != nil {
 		return archiveState{}, fmt.Errorf("open gzip stream: %w", err)
 	}
-	defer gzipReader.Close()
+	defer func() { _ = gzipReader.Close() }()
 
 	tarReader := tar.NewReader(gzipReader)
 	state := archiveState{}
@@ -91,7 +91,7 @@ func inspectArchive(r io.Reader, onFile func(header *tar.Header, reader io.Reade
 					return archiveState{}, err
 				}
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			if cleanName == path.Join(state.topLevel, ".skill", "manifest.json") {
 				manifestBytes, err := io.ReadAll(tarReader)
 				if err != nil {

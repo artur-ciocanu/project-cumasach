@@ -15,7 +15,7 @@ func VerifyPackage(path string) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("open package archive %q: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return verifyPackageArchive(file, os.TempDir(), "")
 }
@@ -25,7 +25,7 @@ func verifyPackageArchive(r io.Reader, parentDir, reference string) (Result, err
 	if err != nil {
 		return Result{}, err
 	}
-	defer os.RemoveAll(filepath.Dir(extractedRoot))
+	defer func() { _ = os.RemoveAll(filepath.Dir(extractedRoot)) }()
 
 	verifiedFilesSHA256, err := verifyFilesSHA256(extractedRoot)
 	if err != nil {

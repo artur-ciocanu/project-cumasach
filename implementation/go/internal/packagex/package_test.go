@@ -94,7 +94,7 @@ func readArchiveEntries(t *testing.T, archiveBytes []byte) map[string][]byte {
 	if err != nil {
 		t.Fatalf("gzip.NewReader() error = %v", err)
 	}
-	defer gzipReader.Close()
+	defer func() { _ = gzipReader.Close() }()
 
 	tarReader := tar.NewReader(gzipReader)
 	entries := map[string][]byte{}
@@ -107,7 +107,7 @@ func readArchiveEntries(t *testing.T, archiveBytes []byte) map[string][]byte {
 			t.Fatalf("tarReader.Next() error = %v", err)
 		}
 
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		if header.Typeflag != tar.TypeReg {
 			continue
 		}
 

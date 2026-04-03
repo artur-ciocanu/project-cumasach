@@ -16,7 +16,7 @@ func LoadFile(path string) (File, error) {
 	if err != nil {
 		return File{}, fmt.Errorf("open lockfile %q: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	lockfile, err := LoadReader(file)
 	if err != nil {

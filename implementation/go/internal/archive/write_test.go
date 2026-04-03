@@ -612,8 +612,8 @@ func buildArchive(t *testing.T, entries ...tarEntry) []byte {
 	if err != nil {
 		t.Fatalf("NewWriterLevel() error = %v", err)
 	}
-	gzipWriter.Header.ModTime = unixEpoch
-	gzipWriter.Header.OS = 255
+	gzipWriter.ModTime = unixEpoch
+	gzipWriter.OS = 255
 
 	tarWriter := tar.NewWriter(gzipWriter)
 	for _, entry := range entries {

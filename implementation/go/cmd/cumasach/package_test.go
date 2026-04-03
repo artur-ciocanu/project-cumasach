@@ -12,7 +12,7 @@ import (
 )
 
 func TestPackageCommandBuildsArchiveWithFilesSHA256(t *testing.T) {
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 
 	skillDir := fixtureSkillDir(t)
@@ -43,7 +43,7 @@ func TestPackageCommandBuildsArchiveWithFilesSHA256(t *testing.T) {
 }
 
 func TestPackageCommandUsesDefaultOutputPath(t *testing.T) {
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 
 	cwd := t.TempDir()
@@ -68,7 +68,7 @@ func TestPackageCommandUsesDefaultOutputPath(t *testing.T) {
 	if err := os.Chdir(cwd); err != nil {
 		t.Fatalf("Chdir() error = %v", err)
 	}
-	defer os.Chdir(originalWD)
+	defer func() { _ = os.Chdir(originalWD) }()
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -80,7 +80,7 @@ func TestPackageCommandUsesDefaultOutputPath(t *testing.T) {
 }
 
 func TestPackageCommandFailurePreservesExistingOutputFile(t *testing.T) {
-	cmd := newRootCmd()
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
 
 	outputPath := filepath.Join(t.TempDir(), "list-directory.tgz")
@@ -130,7 +130,7 @@ func readTGZEntries(t *testing.T, archiveBytes []byte) map[string][]byte {
 	if err != nil {
 		t.Fatalf("gzip.NewReader() error = %v", err)
 	}
-	defer gzipReader.Close()
+	defer func() { _ = gzipReader.Close() }()
 
 	tarReader := tar.NewReader(gzipReader)
 	entries := map[string][]byte{}
@@ -143,7 +143,7 @@ func readTGZEntries(t *testing.T, archiveBytes []byte) map[string][]byte {
 			t.Fatalf("tarReader.Next() error = %v", err)
 		}
 
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		if header.Typeflag != tar.TypeReg {
 			continue
 		}
 

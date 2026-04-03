@@ -14,7 +14,7 @@ func LoadFile(path string) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, fmt.Errorf("open manifest file %q: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	manifest, err := LoadReader(file)
 	if err != nil {

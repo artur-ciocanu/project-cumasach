@@ -238,7 +238,7 @@ func writeArchiveFromDir(t *testing.T, sourceDir string) string {
 	if err != nil {
 		t.Fatalf("Create(archivePath) error = %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	gzipWriter := gzip.NewWriter(file)
 	tarWriter := tar.NewWriter(gzipWriter)

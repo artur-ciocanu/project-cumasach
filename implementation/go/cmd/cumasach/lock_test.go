@@ -22,7 +22,7 @@ func TestLockCommand(t *testing.T) {
 		rootRef := pushCommandSkill(t, registry, "root", "1.0.0", nil)
 		outputPath := filepath.Join(t.TempDir(), "root.lock.json")
 
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -50,7 +50,7 @@ func TestLockCommand(t *testing.T) {
 		rootRef := pushCommandSkillToRepository(t, registry, "registry.example.com/published/root-artifact", "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
 		outputPath := filepath.Join(t.TempDir(), "root.lock.json")
 
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -82,7 +82,7 @@ func TestLockCommand(t *testing.T) {
 		outputPath := filepath.Join(t.TempDir(), "named.lock.json")
 		pushCommandSkill(t, registry, "root", "1.0.0", nil)
 
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -102,7 +102,7 @@ func TestLockCommand(t *testing.T) {
 	})
 
 	t.Run("package name without from fails", func(t *testing.T) {
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -137,7 +137,7 @@ func TestLockCommand(t *testing.T) {
 			}
 		})
 
-		cmd := newRootCmd()
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
@@ -168,7 +168,7 @@ func TestLockCommand(t *testing.T) {
 		} {
 			t.Run(name, func(t *testing.T) {
 				outputPath := filepath.Join(t.TempDir(), name+".lock.json")
-				cmd := newRootCmd()
+				cmd := newRootCmd("test", "abc1234", "2026-01-01")
 				var stdout bytes.Buffer
 				cmd.SetOut(&stdout)
 				cmd.SetErr(&stdout)
