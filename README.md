@@ -5,6 +5,8 @@
   from <em>cumas</em> meaning capability. A fitting name for a tool that makes agent skills production-capable.
 </p>
 
+---
+
 **OCI-native packaging for Agent Skills.**
 
 Agent skills are everywhere — Claude Code, Cursor, Copilot, Codex, OpenClaw — but distribution is still git clones and folder copies. No versioning beyond "whatever's on main." No dependency resolution. No provenance. Security audits routinely surface critical findings — command injection, credential exposure, excessive permissions — across the ecosystem.
