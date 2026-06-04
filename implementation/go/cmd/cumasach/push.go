@@ -8,6 +8,7 @@ import (
 
 	archivepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/archive"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
+	verifypkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/verify"
 	"github.com/spf13/cobra"
 )
 
@@ -17,13 +18,23 @@ var newPushRegistry = func() oci.Registry {
 
 func newPushCmd() *cobra.Command {
 	var tag string
+	var certificateIdentity string
+	var certificateOIDCIssuer string
+	var builderID string
+	var sourceRepository string
 
 	cmd := &cobra.Command{
 		Use:   "push package.tgz oci-repo",
 		Short: "Push a packaged skill artifact to an OCI registry",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			artifactRef, err := pushPackage(cmd.Context(), newPushRegistry(), args[0], args[1], tag)
+			policy := verifypkg.TrustPolicy{
+				CertificateIdentity:   certificateIdentity,
+				CertificateOIDCIssuer: certificateOIDCIssuer,
+				BuilderID:             builderID,
+				SourceRepository:      sourceRepository,
+			}
+			artifactRef, err := pushPackage(cmd.Context(), newPushRegistry(), args[0], args[1], tag, policy)
 			if err != nil {
 				return err
 			}
@@ -37,11 +48,19 @@ func newPushCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&tag, "tag", "", "Tag to apply to the pushed artifact")
+	cmd.Flags().StringVar(&certificateIdentity, "certificate-identity", "", "Expected Sigstore certificate identity for the published artifact")
+	cmd.Flags().StringVar(&certificateOIDCIssuer, "certificate-oidc-issuer", "", "Expected Sigstore OIDC issuer for the published artifact")
+	cmd.Flags().StringVar(&builderID, "builder-id", "", "Expected SLSA builder identity for the published artifact")
+	cmd.Flags().StringVar(&sourceRepository, "source-repo", "", "Expected source repository URI recorded in provenance")
 
 	return cmd
 }
 
-func pushPackage(ctx context.Context, registry oci.Registry, packagePath, repository, tag string) (string, error) {
+func pushPackage(ctx context.Context, registry oci.Registry, packagePath, repository, tag string, policy verifypkg.TrustPolicy) (string, error) {
+	if err := policy.ValidateForOCI(); err != nil {
+		return "", err
+	}
+
 	archiveBytes, err := os.ReadFile(packagePath)
 	if err != nil {
 		return "", fmt.Errorf("read package archive: %w", err)
@@ -60,6 +79,13 @@ func pushPackage(ctx context.Context, registry oci.Registry, packagePath, reposi
 		Tag: tag,
 	})
 	if err != nil {
+		return "", err
+	}
+
+	if err := verifypkg.SignPublishedArtifact(ctx, pushed.Canonical(), policy); err != nil {
+		return "", err
+	}
+	if _, err := verifypkg.VerifyReference(ctx, registry, pushed.Canonical(), policy); err != nil {
 		return "", err
 	}
 

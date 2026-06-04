@@ -10,7 +10,11 @@ import (
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 )
 
-func VerifyReference(ctx context.Context, registry oci.Registry, reference string) (Result, error) {
+func VerifyReference(ctx context.Context, registry oci.Registry, reference string, policy TrustPolicy) (Result, error) {
+	if err := VerifyPublishedArtifactTrust(ctx, reference, policy); err != nil {
+		return Result{}, err
+	}
+
 	fetched, err := oci.Fetch(ctx, registry, reference)
 	if err != nil {
 		return Result{}, err

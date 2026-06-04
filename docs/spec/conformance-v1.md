@@ -22,6 +22,7 @@ A consumer implementation is conformant if it can:
 - validate the manifest against the schema
 - validate package layout rules
 - resolve dependencies according to the v1 rules
+- verify required signatures and required provenance for published OCI artifacts
 - activate one selected version per skill name into a flat runtime-visible directory
 - record lock and install-state data
 - perform rollback from recorded state
@@ -115,9 +116,22 @@ The implementation MUST pass:
 - pulled tarball digest matches the originally published content layer digest
 - pulled config blob matches the mirrored manifest
 
+### 3.7 Trust verification
+
+The implementation MUST pass:
+
+- published OCI artifacts without a valid signature are rejected as non-conformant
+- published OCI artifacts without a valid in-toto SLSA provenance attestation are rejected as non-conformant
+- provenance verification fails when the expected builder identity does not match
+- provenance verification fails when the expected source repository does not match
+- baseline verification succeeds for a valid keyless signature plus valid SLSA provenance
+- optional `--no-verify` or equivalent insecure bypass is treated as an operator override and MUST NOT be used as conformance evidence
+- optional SBOM and vulnerability attestations, when absent, do not cause baseline v1 verification to fail
+- unrecognized referrers do not make an artifact pass or fail baseline verification on their own
+
 Release evidence for this section MUST come from one successful execution of `scripts/run-oras-conformance.sh` against a real registry with valid credentials. Before that helper runs, the exact repo root or worktree root containing that helper and its `mise.toml` MUST already be trusted, for example by changing into that same root and running `mise trust`, so the canonical `mise exec --` path can load the pinned toolchain. That helper MUST execute the round-trip test through the repository's pinned toolchain, so both `go` and the stock-`oras` subprocess are resolved from the supported release-gate environment. A general unit or package test run such as `go test ./...` does not satisfy this transport release gate on its own.
 
-### 3.7 Offline integrity file
+### 3.8 Offline integrity file
 
 A consumer implementation that advertises `.skill/files.sha256` verification support MUST pass:
 
@@ -135,6 +149,8 @@ Conformant consumers MUST fail closed for:
 - manifest mismatch between tarball and OCI config
 - unsatisfied dependency constraints
 - unsupported mandatory media types
+- missing or invalid required signature verification for a published OCI artifact
+- missing or invalid required provenance verification for a published OCI artifact
 
 Conformant consumers SHOULD produce machine-readable errors with at least:
 
@@ -153,6 +169,7 @@ Implementers SHOULD automate:
 - JSON Schema validation
 - package layout validation
 - ORAS push/pull smoke test against a disposable OCI registry
+- trust verification checks for signature and provenance failure modes
 - dependency-resolution golden tests
 - rollback state restoration tests
 

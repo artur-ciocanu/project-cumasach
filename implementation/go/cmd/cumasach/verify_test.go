@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	archivepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/archive"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 )
 
@@ -55,27 +56,70 @@ func TestVerifyCommand(t *testing.T) {
 	})
 
 	t.Run("verify OCI reference succeeds", func(t *testing.T) {
+		installFakeCosignRunner(t, "https://github.com/example/builders/cumasach", "https://github.com/example/project-cumasach")
+
 		registry := oci.NewMemoryRegistry()
 		restore := swapVerifyRegistry(t, registry)
 		defer restore()
 
 		archivePath := buildNamedPackage(t, "list-directory", "1.2.3", nil)
-		ref, err := pushPackage(context.Background(), registry, archivePath, "registry.example.com/agentskills/list-directory", "")
+		archiveBytes, err := os.ReadFile(archivePath)
 		if err != nil {
-			t.Fatalf("pushPackage() error = %v", err)
+			t.Fatalf("ReadFile(archivePath) error = %v", err)
 		}
+		mirroredManifestBytes, mirroredManifest, err := archivepkg.ReadMirroredManifestTGZ(bytes.NewReader(archiveBytes))
+		if err != nil {
+			t.Fatalf("ReadMirroredManifestTGZ() error = %v", err)
+		}
+		refValue, err := oci.Push(context.Background(), registry, "registry.example.com/agentskills/list-directory", mirroredManifestBytes, archiveBytes, oci.PushOptions{Tag: mirroredManifest.Version})
+		if err != nil {
+			t.Fatalf("oci.Push() error = %v", err)
+		}
+		ref := refValue.Canonical()
 
 		cmd := newRootCmd("test", "abc1234", "2026-01-01")
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stdout)
-		cmd.SetArgs([]string{"verify", ref})
+		cmd.SetArgs([]string{
+			"verify",
+			ref,
+			"--certificate-identity", "https://github.com/example/workflows/release.yml@refs/heads/main",
+			"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
+			"--builder-id", "https://github.com/example/builders/cumasach",
+			"--source-repo", "https://github.com/example/project-cumasach",
+		})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("Execute() error = %v", err)
 		}
 		if output := stdout.String(); !strings.Contains(output, "verified OCI artifact list-directory 1.2.3") {
 			t.Fatalf("stdout = %q, want OCI verify summary", output)
+		}
+	})
+
+	t.Run("verify OCI reference requires verifier inputs by default", func(t *testing.T) {
+		registry := oci.NewMemoryRegistry()
+		restore := swapVerifyRegistry(t, registry)
+		defer restore()
+
+		refValue, err := oci.Push(context.Background(), registry, "registry.example.com/agentskills/list-directory", []byte(`{"schemaVersion":"v1","packageType":"skill","name":"list-directory","version":"1.2.3","skill":{"entrypoint":"SKILL.md"}}`), []byte("archive"), oci.PushOptions{Tag: "1.2.3"})
+		if err != nil {
+			t.Fatalf("oci.Push() error = %v", err)
+		}
+
+		cmd := newRootCmd("test", "abc1234", "2026-01-01")
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stdout)
+		cmd.SetArgs([]string{"verify", refValue.Canonical()})
+
+		err = cmd.Execute()
+		if err == nil {
+			t.Fatal("Execute() error = nil, want missing verifier input failure")
+		}
+		if !strings.Contains(err.Error(), "--certificate-identity") {
+			t.Fatalf("Execute() error = %q, want verifier input failure", err)
 		}
 	})
 

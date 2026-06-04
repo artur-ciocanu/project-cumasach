@@ -9,12 +9,15 @@ import (
 	"strings"
 	"testing"
 
+	archivepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/archive"
 	manifestpkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/manifest"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/packagex"
 )
 
 func TestInstallCommandInstallsArtifactAndDependenciesIntoTarget(t *testing.T) {
+	installFakeCosignRunner(t, "https://github.com/example/builders/cumasach", "https://github.com/example/project-cumasach")
+
 	registry := oci.NewMemoryRegistry()
 	restore := swapInstallRegistry(t, registry)
 	defer restore()
@@ -32,6 +35,10 @@ func TestInstallCommandInstallsArtifactAndDependenciesIntoTarget(t *testing.T) {
 		ref,
 		"--from", "registry.example.com/catalog",
 		"--target", targetDir,
+		"--certificate-identity", "https://github.com/example/workflows/release.yml@refs/heads/main",
+		"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
+		"--builder-id", "https://github.com/example/builders/cumasach",
+		"--source-repo", "https://github.com/example/project-cumasach",
 	})
 
 	if err := cmd.Execute(); err != nil {
@@ -86,6 +93,7 @@ func TestInstallCommandPackageNameRequiresFrom(t *testing.T) {
 		"install",
 		"root",
 		"--target", t.TempDir(),
+		"--no-verify",
 	})
 
 	err := cmd.Execute()
@@ -115,6 +123,7 @@ func TestInstallCommandResolvesPackageNameDependenciesFromBase(t *testing.T) {
 		"root",
 		"--from", "registry.example.com/agentskills",
 		"--target", targetDir,
+		"--no-verify",
 	})
 
 	if err := cmd.Execute(); err != nil {
@@ -141,6 +150,7 @@ func TestInstallCommandSurfacesUnresolvedDependencyFailures(t *testing.T) {
 		"root",
 		"--from", "registry.example.com/agentskills",
 		"--target", t.TempDir(),
+		"--no-verify",
 	})
 
 	err := cmd.Execute()
@@ -171,6 +181,32 @@ func TestInstallCommandRequiresTarget(t *testing.T) {
 	}
 }
 
+func TestInstallCommandRequiresVerifierInputsByDefault(t *testing.T) {
+	registry := oci.NewMemoryRegistry()
+	restore := swapInstallRegistry(t, registry)
+	defer restore()
+
+	ref := pushCommandSkillToRepository(t, registry, "registry.example.com/published/root-artifact", "root", "1.0.0", nil)
+
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stdout)
+	cmd.SetArgs([]string{
+		"install",
+		ref,
+		"--target", t.TempDir(),
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want verifier input failure")
+	}
+	if !strings.Contains(err.Error(), "--certificate-identity") {
+		t.Fatalf("Execute() error = %q, want verifier input failure", err)
+	}
+}
+
 func TestInstallCommandRejectsMalformedArtifactReference(t *testing.T) {
 	cmd := newRootCmd("test", "abc1234", "2026-01-01")
 	var stdout bytes.Buffer
@@ -180,6 +216,7 @@ func TestInstallCommandRejectsMalformedArtifactReference(t *testing.T) {
 		"install",
 		"oci://registry.example.com/agentskills/list-directory@sha256:short",
 		"--target", t.TempDir(),
+		"--no-verify",
 	})
 
 	err := cmd.Execute()
@@ -212,6 +249,7 @@ func TestInstallCommandLockfileMode(t *testing.T) {
 			"install",
 			"--lockfile", lockfilePath,
 			"--target", targetDir,
+			"--no-verify",
 		})
 
 		if err := cmd.Execute(); err != nil {
@@ -320,11 +358,19 @@ func pushCommandSkillToRepository(t *testing.T, registry oci.Registry, repositor
 	t.Helper()
 
 	packagePath := buildNamedPackage(t, name, version, dependencies)
-	ref, err := pushPackage(context.Background(), registry, packagePath, repository, "")
+	archiveBytes, err := os.ReadFile(packagePath)
 	if err != nil {
-		t.Fatalf("pushPackage() error = %v", err)
+		t.Fatalf("ReadFile(packagePath) error = %v", err)
 	}
-	return ref
+	mirroredManifestBytes, mirroredManifest, err := archivepkg.ReadMirroredManifestTGZ(bytes.NewReader(archiveBytes))
+	if err != nil {
+		t.Fatalf("ReadMirroredManifestTGZ() error = %v", err)
+	}
+	ref, err := oci.Push(context.Background(), registry, repository, mirroredManifestBytes, archiveBytes, oci.PushOptions{Tag: mirroredManifest.Version})
+	if err != nil {
+		t.Fatalf("oci.Push() error = %v", err)
+	}
+	return ref.Canonical()
 }
 
 func writeLockfileForRoot(t *testing.T, registry oci.Registry, reference, from string) string {
