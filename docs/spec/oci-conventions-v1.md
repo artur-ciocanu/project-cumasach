@@ -16,7 +16,7 @@ A v1 Cumasach skill artifact consists of:
 
 The OCI image manifest for a v1 artifact MUST contain exactly one config descriptor and exactly one layer descriptor. Additional manifest layers are invalid in v1.
 
-Version 1 does not require additional OCI layers. Signatures, provenance, and attestations SHOULD be attached via OCI referrers when the registry supports them.
+Version 1 does not require additional OCI layers. Signatures, provenance, and attestations MUST be attached via OCI referrers or a registry-compatible equivalent when the registry supports them.
 
 ## 3. Media Types
 
@@ -120,13 +120,28 @@ When an artifact is fetched from OCI, the canonical trust source is:
 
 - the OCI manifest digest
 - the config blob digest
-- any registry-backed signatures or attestations
+- the required registry-backed signature and provenance attestations
 
 The content-layer digest is useful for payload integrity checks, but it is not the package identity recorded in lockfiles or install state.
 
+For conformant published OCI artifacts in v1:
+
+- a keyless Sigstore-compatible signature is REQUIRED
+- an in-toto attestation carrying SLSA provenance is REQUIRED
+- verification of that provenance MUST confirm the expected builder identity
+- verification of that provenance MUST confirm the expected source repository
+
+Consumers MUST fail closed when any required signature or provenance verification step is absent, unreadable, or invalid.
+
+Consumers MUST NOT treat `source`, `publisher`, or arbitrary extension metadata as proof of authenticity or as a substitute for signature and provenance verification.
+
 ### 6.2 Referrers
 
-If the registry supports OCI referrers, implementations SHOULD publish signatures and provenance as referrers to the resolved artifact digest.
+If the registry supports OCI referrers, implementations MUST publish the required signature and required provenance as referrers to the resolved artifact digest.
+
+Consumers MUST ignore unrecognized referrers unless an implementation-defined policy explicitly recognizes them.
+
+Optional attestations such as SBOMs, vulnerability findings, or enterprise PKI-specific metadata MAY also be published as referrers, but they are not required for baseline v1 conformance.
 
 ### 6.3 Offline fallback
 
@@ -138,6 +153,7 @@ Publishers:
 
 - MUST produce byte-stable config JSON for a given artifact
 - MUST ensure the mirrored manifest matches the OCI config blob exactly
+- MUST publish the required signature and required SLSA provenance for conformant OCI artifacts
 - SHOULD publish semver tags
 - SHOULD publish digests in release metadata
 
@@ -149,13 +165,14 @@ Consumers:
 - MUST validate the content-layer media type
 - MUST fail if the manifest contains anything other than exactly one config descriptor and exactly one content layer descriptor
 - MUST fetch or otherwise read the canonical config blob before comparing it with `.skill/manifest.json`
+- MUST verify the required signature and required provenance before treating a published OCI artifact as conformant, unless an explicit insecure bypass is selected by the operator
 - SHOULD prefer digest-based installation and locking
 
 ## 9. Future Extension Points
 
 Later versions MAY define:
 
-- a dedicated provenance attachment media type
 - SBOM attachment conventions
 - bundle or collection artifact types
 - lockfile artifact publication conventions
+- enterprise PKI verification profiles

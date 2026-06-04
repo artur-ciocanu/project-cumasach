@@ -12,6 +12,8 @@ import (
 
 func TestRollbackCommand(t *testing.T) {
 	t.Run("rollback target succeeds", func(t *testing.T) {
+		installFakeCosignRunner(t, "https://github.com/example/builders/cumasach", "https://github.com/example/project-cumasach")
+
 		registry := oci.NewMemoryRegistry()
 		restoreInstall := swapInstallRegistry(t, registry)
 		restoreRollback := swapRollbackRegistry(t, registry)
@@ -27,6 +29,7 @@ func TestRollbackCommand(t *testing.T) {
 			"root",
 			"--from", "registry.example.com/agentskills",
 			"--target", targetDir,
+			"--no-verify",
 		)
 
 		pushCommandSkill(t, registry, "child", "2.0.0", nil)
@@ -36,6 +39,7 @@ func TestRollbackCommand(t *testing.T) {
 			"root",
 			"--from", "registry.example.com/agentskills",
 			"--target", targetDir,
+			"--no-verify",
 		)
 
 		cmd := newRootCmd("test", "abc1234", "2026-01-01")

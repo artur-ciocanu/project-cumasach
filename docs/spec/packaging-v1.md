@@ -288,6 +288,10 @@ Requirements are declarative only. A package MUST NOT bundle the referenced host
 
 `source` and `publisher` are OPTIONAL metadata objects intended for provenance, policy, and discovery.
 
+They are descriptive metadata only.
+
+Consumers MUST NOT use `source`, `publisher`, or arbitrary `metadata` values as proof of authenticity or as a substitute for signature and provenance verification.
+
 If present, `source` MUST NOT contain additional fields in v1.
 
 If present, `source` MAY include:
@@ -331,7 +335,7 @@ Consumers MUST fail `files.sha256` verification if the file contains malformed l
 
 Consumers MUST NOT generate or accept package paths that cannot be represented unambiguously in this line-oriented format.
 
-Consumers MAY use `files.sha256` for offline verification, but MUST treat OCI digests and registry-backed signatures as the primary trust source when OCI metadata is available.
+Consumers MAY use `files.sha256` for offline verification, but MUST treat OCI digests, required registry-backed signatures, and required provenance attestations as the primary trust source when OCI metadata is available.
 
 Consumers that do not implement offline verification MAY ignore `.skill/files.sha256` entirely. Consumers that do implement `.skill/files.sha256` verification MUST apply all rules in this section.
 
@@ -509,6 +513,19 @@ Version 1 leaves policy expression implementation-defined, but a compliant ecosy
 - allowed publishers or signing identities
 - handling of missing host requirements
 
+For baseline v1 conformance of published OCI artifacts, the following are mandatory, not optional policy extras:
+
+- a valid keyless signature
+- a valid in-toto SLSA provenance attestation
+- builder identity verification
+- source repository verification
+
+Optional policy layers MAY additionally require:
+
+- enterprise PKI trust anchors
+- SBOM attestations
+- vulnerability attestations
+
 Policy MUST NOT override mandatory failures required by this specification, including invalid package layout, manifest mismatch, and unsatisfied dependencies.
 
 ## 15. Failure Conditions
@@ -523,6 +540,8 @@ A consumer MUST fail a package when any of the following is true:
 - the manifest fails schema validation
 - dependency constraints are unsatisfiable
 - the package payload path layout is malformed
+- a published OCI artifact is missing the required signature or required provenance attestation
+- published OCI artifact provenance does not match the expected builder identity or expected source repository
 
 ## 16. Example
 
@@ -532,12 +551,12 @@ An example package layout is provided in [../../examples/python-development](../
 
 These are explicitly out of scope for v1 but likely candidates for later versions:
 
-- first-class provenance attachment schemas
 - SBOM attachment conventions
 - signed lockfiles
 - profile- or environment-scoped activation sets
 - package collections or bundles
 - optional feature flags for dependencies
+- enterprise PKI verification profiles
 - **Extraction size limits** — v1 does not define maximum archive or file size
   constraints during extraction. Implementations SHOULD consider enforcing
   configurable size limits in production deployments to guard against

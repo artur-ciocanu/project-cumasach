@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	installpkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/install"
 	lockfilepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/lockfile"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/resolve"
+	verifypkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/verify"
 	"github.com/spf13/cobra"
 )
 
@@ -18,6 +20,11 @@ func newInstallCmd() *cobra.Command {
 	var targetDir string
 	var from string
 	var lockfile string
+	var noVerify bool
+	var certificateIdentity string
+	var certificateOIDCIssuer string
+	var builderID string
+	var sourceRepository string
 
 	cmd := &cobra.Command{
 		Use:   "install artifact-ref",
@@ -39,6 +46,13 @@ func newInstallCmd() *cobra.Command {
 			}
 
 			registry := newInstallRegistry()
+			policy := verifypkg.TrustPolicy{
+				NoVerify:              noVerify,
+				CertificateIdentity:   certificateIdentity,
+				CertificateOIDCIssuer: certificateOIDCIssuer,
+				BuilderID:             builderID,
+				SourceRepository:      sourceRepository,
+			}
 			var graph resolve.Graph
 			if lockfile != "" {
 				file, err := lockfilepkg.Load(lockfile)
@@ -65,6 +79,9 @@ func newInstallCmd() *cobra.Command {
 					return err
 				}
 			}
+			if err := preverifyGraph(cmd.Context(), registry, graph, policy); err != nil {
+				return err
+			}
 
 			state, err := installpkg.Install(cmd.Context(), installpkg.Options{
 				Registry:  registry,
@@ -90,8 +107,29 @@ func newInstallCmd() *cobra.Command {
 	cmd.Flags().StringVar(&targetDir, "target", "", "Target flat skills directory")
 	cmd.Flags().StringVar(&from, "from", "", "Repository base for package-name resolution")
 	cmd.Flags().StringVar(&lockfile, "lockfile", "", "Install from a lockfile")
+	cmd.Flags().BoolVar(&noVerify, "no-verify", false, "Bypass OCI signature and provenance verification")
+	cmd.Flags().StringVar(&certificateIdentity, "certificate-identity", "", "Expected Sigstore certificate identity for OCI artifact verification")
+	cmd.Flags().StringVar(&certificateOIDCIssuer, "certificate-oidc-issuer", "", "Expected Sigstore OIDC issuer for OCI artifact verification")
+	cmd.Flags().StringVar(&builderID, "builder-id", "", "Expected SLSA builder identity for OCI artifact verification")
+	cmd.Flags().StringVar(&sourceRepository, "source-repo", "", "Expected source repository URI recorded in provenance")
 
 	return cmd
+}
+
+func preverifyGraph(ctx context.Context, registry oci.Registry, graph resolve.Graph, policy verifypkg.TrustPolicy) error {
+	if policy.NoVerify {
+		return nil
+	}
+	if err := policy.ValidateForOCI(); err != nil {
+		return err
+	}
+
+	for _, selected := range graph.Packages {
+		if _, err := verifypkg.VerifyReference(ctx, registry, selected.Reference, policy); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func parseInstallRoot(value, from string) (resolve.Root, error) {

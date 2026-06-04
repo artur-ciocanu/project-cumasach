@@ -17,6 +17,8 @@ import (
 )
 
 func TestPushCommandPushesPackageAndPrintsCanonicalReference(t *testing.T) {
+	installFakeCosignRunner(t, "https://github.com/example/builders/cumasach", "https://github.com/example/project-cumasach")
+
 	tests := []struct {
 		name       string
 		repository string
@@ -43,7 +45,15 @@ func TestPushCommandPushesPackageAndPrintsCanonicalReference(t *testing.T) {
 			var stdout bytes.Buffer
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stdout)
-			cmd.SetArgs([]string{"push", packagePath, tt.repository})
+			cmd.SetArgs([]string{
+				"push",
+				packagePath,
+				tt.repository,
+				"--certificate-identity", "https://github.com/example/workflows/release.yml@refs/heads/main",
+				"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
+				"--builder-id", "https://github.com/example/builders/cumasach",
+				"--source-repo", "https://github.com/example/project-cumasach",
+			})
 
 			if err := cmd.Execute(); err != nil {
 				t.Fatalf("Execute() error = %v", err)
@@ -72,6 +82,8 @@ func TestPushCommandPushesPackageAndPrintsCanonicalReference(t *testing.T) {
 }
 
 func TestPushCommandUsesExplicitTag(t *testing.T) {
+	installFakeCosignRunner(t, "https://github.com/example/builders/cumasach", "https://github.com/example/project-cumasach")
+
 	registry := oci.NewMemoryRegistry()
 	restore := swapPushRegistry(t, registry)
 	defer restore()
@@ -87,6 +99,10 @@ func TestPushCommandUsesExplicitTag(t *testing.T) {
 		packagePath,
 		"registry.example.com/agentskills/list-directory",
 		"--tag", "stable",
+		"--certificate-identity", "https://github.com/example/workflows/release.yml@refs/heads/main",
+		"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
+		"--builder-id", "https://github.com/example/builders/cumasach",
+		"--source-repo", "https://github.com/example/project-cumasach",
 	})
 
 	if err := cmd.Execute(); err != nil {
@@ -99,6 +115,8 @@ func TestPushCommandUsesExplicitTag(t *testing.T) {
 }
 
 func TestPushCommandFailsForMissingArchive(t *testing.T) {
+	installFakeCosignRunner(t, "https://github.com/example/builders/cumasach", "https://github.com/example/project-cumasach")
+
 	registry := oci.NewMemoryRegistry()
 	restore := swapPushRegistry(t, registry)
 	defer restore()
@@ -111,6 +129,10 @@ func TestPushCommandFailsForMissingArchive(t *testing.T) {
 		"push",
 		filepath.Join(t.TempDir(), "missing.tgz"),
 		"registry.example.com/agentskills/list-directory",
+		"--certificate-identity", "https://github.com/example/workflows/release.yml@refs/heads/main",
+		"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
+		"--builder-id", "https://github.com/example/builders/cumasach",
+		"--source-repo", "https://github.com/example/project-cumasach",
 	})
 
 	err := cmd.Execute()
@@ -123,6 +145,8 @@ func TestPushCommandFailsForMissingArchive(t *testing.T) {
 }
 
 func TestPushCommandFailsForSemanticallyInvalidManifest(t *testing.T) {
+	installFakeCosignRunner(t, "https://github.com/example/builders/cumasach", "https://github.com/example/project-cumasach")
+
 	registry := oci.NewMemoryRegistry()
 	restore := swapPushRegistry(t, registry)
 	defer restore()
@@ -144,6 +168,10 @@ func TestPushCommandFailsForSemanticallyInvalidManifest(t *testing.T) {
 		"push",
 		packagePath,
 		"registry.example.com/agentskills/list-directory",
+		"--certificate-identity", "https://github.com/example/workflows/release.yml@refs/heads/main",
+		"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
+		"--builder-id", "https://github.com/example/builders/cumasach",
+		"--source-repo", "https://github.com/example/project-cumasach",
 	})
 
 	err := cmd.Execute()
@@ -152,6 +180,34 @@ func TestPushCommandFailsForSemanticallyInvalidManifest(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "constraint") {
 		t.Fatalf("Execute() error = %q, want dependency constraint context", err)
+	}
+}
+
+func TestPushCommandRequiresTrustInputs(t *testing.T) {
+	installFakeCosignRunner(t, "https://github.com/example/builders/cumasach", "https://github.com/example/project-cumasach")
+
+	registry := oci.NewMemoryRegistry()
+	restore := swapPushRegistry(t, registry)
+	defer restore()
+
+	packagePath := buildFixturePackage(t)
+
+	cmd := newRootCmd("test", "abc1234", "2026-01-01")
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stdout)
+	cmd.SetArgs([]string{
+		"push",
+		packagePath,
+		"registry.example.com/agentskills/list-directory",
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("Execute() error = nil, want missing trust input failure")
+	}
+	if !strings.Contains(err.Error(), "--certificate-identity") {
+		t.Fatalf("Execute() error = %q, want trust input failure", err)
 	}
 }
 

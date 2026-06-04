@@ -29,7 +29,7 @@ func TestVerifyReference(t *testing.T) {
 			t.Fatalf("Push() error = %v", err)
 		}
 
-		result, err := VerifyReference(ctx, registry, ref.Canonical())
+		result, err := VerifyReference(ctx, registry, ref.Canonical(), TrustPolicy{NoVerify: true})
 		if err != nil {
 			t.Fatalf("VerifyReference() error = %v", err)
 		}
@@ -57,7 +57,7 @@ func TestVerifyReference(t *testing.T) {
 			t.Fatalf("Push() error = %v", err)
 		}
 
-		_, err = VerifyReference(ctx, registry, ref.Canonical())
+		_, err = VerifyReference(ctx, registry, ref.Canonical(), TrustPolicy{NoVerify: true})
 		if err == nil {
 			t.Fatal("VerifyReference() error = nil, want config mismatch failure")
 		}
@@ -86,13 +86,13 @@ func TestVerifyReference(t *testing.T) {
 			store: &staticReadOnlyTarget{
 				blobs: map[string][]byte{
 					content.NewDescriptorFromBytes(ocispec.MediaTypeImageManifest, manifestBytes).Digest.String(): manifestBytes,
-					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": []byte(`{}`),
-					"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": []byte("archive"),
+					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":                     []byte(`{}`),
+					"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb":                     []byte("archive"),
 				},
 			},
 		}
 
-		_, err := VerifyReference(context.Background(), registry, "oci://registry.example.com/agentskills/list-directory@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+		_, err := VerifyReference(context.Background(), registry, "oci://registry.example.com/agentskills/list-directory@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", TrustPolicy{NoVerify: true})
 		if err == nil {
 			t.Fatal("VerifyReference() error = nil, want media type failure")
 		}

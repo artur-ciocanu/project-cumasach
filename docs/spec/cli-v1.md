@@ -167,7 +167,11 @@ dist/<name>-<version>.tgz
 ### 8.2 Invocation
 
 ```text
-cumasach push <package.tgz> <oci-repo> [--tag <tag>]
+cumasach push <package.tgz> <oci-repo> [--tag <tag>] \
+  --certificate-identity <identity> \
+  --certificate-oidc-issuer <issuer> \
+  --builder-id <builder-id> \
+  --source-repo <repo>
 ```
 
 ### 8.3 Required behavior
@@ -178,6 +182,9 @@ cumasach push <package.tgz> <oci-repo> [--tag <tag>]
 - use that manifest as the OCI config blob
 - publish the package tarball as the OCI content layer
 - use the required v1 media types
+- publish a keyless signature for the resolved OCI artifact
+- publish an in-toto SLSA provenance attestation for the resolved OCI artifact
+- verify that the published artifact satisfies the required signature and provenance checks before reporting success
 - print or otherwise return the resolved digest-pinned artifact reference
 
 If `--tag` is omitted, implementations SHOULD default the publication tag to the manifest `version`.
@@ -189,6 +196,7 @@ If `--tag` is omitted, implementations SHOULD default the publication tag to the
 - the input package is malformed
 - the mirrored manifest cannot be used as a valid OCI config blob
 - the artifact cannot be published with the required v1 shape
+- the required signature or required provenance cannot be published or verified
 
 ## 9. `install`
 
@@ -203,13 +211,13 @@ Version 1 install behavior is non-destructive with respect to unrelated pre-exis
 Form A, root-driven install:
 
 ```text
-cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>] [--lockfile <file>]
+cumasach install <artifact-ref|package-name> --target <skills-dir> [--from <oci-base>] [--lockfile <file>] [--no-verify] [--certificate-identity <identity>] [--certificate-oidc-issuer <issuer>] [--builder-id <builder-id>] [--source-repo <repo>]
 ```
 
 Form B, lockfile-driven install:
 
 ```text
-cumasach install --lockfile <file> --target <skills-dir>
+cumasach install --lockfile <file> --target <skills-dir> [--no-verify] [--certificate-identity <identity>] [--certificate-oidc-issuer <issuer>] [--builder-id <builder-id>] [--source-repo <repo>]
 ```
 
 ### 9.3 Shared required behavior
@@ -218,6 +226,7 @@ All `install` forms MUST:
 
 - validate fetched or provided package metadata against the v1 rules
 - verify canonical OCI metadata against the mirrored manifest when installing from OCI
+- verify the required signature and required provenance for each OCI artifact before activation, unless `--no-verify` is explicitly selected
 - activate exactly one selected version per skill name into the target flat skills directory
 - leave unrelated pre-existing skill directories in the target untouched
 - record install state
@@ -226,6 +235,13 @@ All `install` forms MUST:
 `--target` is REQUIRED in all forms.
 
 Version 1 does not define an implicit target directory.
+
+If `--no-verify` is not supplied and any OCI artifact must be verified, the CLI MUST require:
+
+- `--certificate-identity`
+- `--certificate-oidc-issuer`
+- `--builder-id`
+- `--source-repo`
 
 ### 9.4 Root-driven install behavior
 
@@ -272,6 +288,8 @@ When `--lockfile` is the only input source:
 - a lockfile is malformed
 - a supplied lockfile and requested root identity disagree
 - the target activation would violate the one-active-version-per-name rule
+- required signature or required provenance verification fails
+- required verifier inputs are missing when verification is enabled
 
 ## 10. `lock`
 
@@ -355,7 +373,7 @@ If required artifacts are missing from any local cache, the implementation MAY r
 ### 12.2 Invocation
 
 ```text
-cumasach verify <package.tgz|artifact-ref>
+cumasach verify <package.tgz|artifact-ref> [--no-verify] [--certificate-identity <identity>] [--certificate-oidc-issuer <issuer>] [--builder-id <builder-id>] [--source-repo <repo>]
 ```
 
 ### 12.3 Required behavior
@@ -373,6 +391,10 @@ If the input is an OCI artifact reference, `verify` MUST validate:
 - OCI config and mirrored manifest equality
 - content layer structure
 - package layout after extraction
+- the required signature, unless `--no-verify` is explicitly selected
+- the required in-toto SLSA provenance attestation, unless `--no-verify` is explicitly selected
+- expected builder identity matching, unless `--no-verify` is explicitly selected
+- expected source repository matching, unless `--no-verify` is explicitly selected
 
 ### 12.4 Failure conditions
 

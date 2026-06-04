@@ -1,2 +1,3 @@
 .worktrees/
 implementation/go/dist/
+graphify-out/

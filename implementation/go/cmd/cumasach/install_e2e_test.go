@@ -16,6 +16,8 @@ import (
 )
 
 func TestInstallCommandEndToEndPackagesPushesAndInstallsDependencies(t *testing.T) {
+	installFakeCosignRunner(t, "https://github.com/example/builders/cumasach", "https://github.com/example/project-cumasach")
+
 	registry := oci.NewMemoryRegistry()
 	restoreInstall := swapInstallRegistry(t, registry)
 	restorePush := swapPushRegistry(t, registry)
@@ -41,12 +43,14 @@ func TestInstallCommandEndToEndPackagesPushesAndInstallsDependencies(t *testing.
 		"scratchpad",
 		"--from", "registry.example.com/agentskills",
 		"--target", targetDir,
+		"--no-verify",
 	)
 	stdout := runRootCommand(t,
 		"install",
 		"workspace-summary",
 		"--from", "registry.example.com/agentskills",
 		"--target", targetDir,
+		"--no-verify",
 	)
 
 	if !strings.Contains(stdout, "installed workspace-summary 1.0.0") {
@@ -94,6 +98,8 @@ func TestInstallCommandEndToEndPackagesPushesAndInstallsDependencies(t *testing.
 }
 
 func TestInstallCommandEndToEndFailsWhenDependencyOnlyHasNonSemverTags(t *testing.T) {
+	installFakeCosignRunner(t, "https://github.com/example/builders/cumasach", "https://github.com/example/project-cumasach")
+
 	registry := oci.NewMemoryRegistry()
 	restoreInstall := swapInstallRegistry(t, registry)
 	restorePush := swapPushRegistry(t, registry)
@@ -119,6 +125,7 @@ func TestInstallCommandEndToEndFailsWhenDependencyOnlyHasNonSemverTags(t *testin
 		"workspace-summary",
 		"--from", "registry.example.com/agentskills",
 		"--target", t.TempDir(),
+		"--no-verify",
 	})
 
 	err := cmd.Execute()
@@ -131,6 +138,8 @@ func TestInstallCommandEndToEndFailsWhenDependencyOnlyHasNonSemverTags(t *testin
 }
 
 func TestInstallLockfileEndToEnd(t *testing.T) {
+	installFakeCosignRunner(t, "https://github.com/example/builders/cumasach", "https://github.com/example/project-cumasach")
+
 	registry := oci.NewMemoryRegistry()
 	restoreInstall := swapInstallRegistry(t, registry)
 	restorePush := swapPushRegistry(t, registry)
@@ -169,11 +178,13 @@ func TestInstallLockfileEndToEnd(t *testing.T) {
 		"scratchpad",
 		"--from", "registry.example.com/agentskills",
 		"--target", lockTarget,
+		"--no-verify",
 	)
 	installStdout := runRootCommand(t,
 		"install",
 		"--lockfile", lockfilePath,
 		"--target", lockTarget,
+		"--no-verify",
 	)
 	if !strings.Contains(installStdout, "installed workspace-summary 1.0.0") {
 		t.Fatalf("lockfile install stdout = %q, want install summary", installStdout)
@@ -185,12 +196,14 @@ func TestInstallLockfileEndToEnd(t *testing.T) {
 		"scratchpad",
 		"--from", "registry.example.com/agentskills",
 		"--target", liveTarget,
+		"--no-verify",
 	)
 	runRootCommand(t,
 		"install",
 		"workspace-summary",
 		"--from", "registry.example.com/agentskills",
 		"--target", liveTarget,
+		"--no-verify",
 	)
 
 	if got, want := listDirNames(t, lockTarget), []string{".cumasach", "scratchpad", "workspace-notes", "workspace-summary"}; strings.Join(got, ",") != strings.Join(want, ",") {
@@ -231,6 +244,12 @@ func pushSkillWithCLI(t *testing.T, packagePath, repository string, extraArgs ..
 
 	args := []string{"push", packagePath, repository}
 	args = append(args, extraArgs...)
+	args = append(args,
+		"--certificate-identity", "https://github.com/example/workflows/release.yml@refs/heads/main",
+		"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
+		"--builder-id", "https://github.com/example/builders/cumasach",
+		"--source-repo", "https://github.com/example/project-cumasach",
+	)
 	return strings.TrimSpace(runRootCommand(t, args...))
 }
 
