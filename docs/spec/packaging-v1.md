@@ -400,7 +400,7 @@ Within a lockfile:
 
 When a valid lockfile is present, consumers MUST prefer the lockfile over live dependency solving.
 
-The `root.reference` field MAY identify the originally requested root artifact reference, but in v1 it MUST still use the same digest-pinned artifact reference format as resolved package entries.
+The `root.reference` field MUST be the resolved, digest-pinned artifact reference of the root package — identical to the `reference` of the package entry identified by `root.name` (§10.2). It records the resolved identity of the originally requested root, not any tag-based or otherwise unresolved form of the original request; a v1 lockfile does not preserve a pre-resolution tag reference.
 
 JSON Schema validation alone does not fully validate artifact-reference correctness in v1. Consumers MUST perform semantic validation that each `reference` is a valid OCI artifact locator in the form defined by this specification.
 
