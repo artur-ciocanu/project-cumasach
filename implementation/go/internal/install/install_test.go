@@ -18,7 +18,10 @@ import (
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/packagex"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/resolve"
+	verifypkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/verify"
 )
+
+var noVerifyPolicy = verifypkg.TrustPolicy{NoVerify: true}
 
 func TestInstallSingleRootWritesActiveDirectoryAndState(t *testing.T) {
 	registry := oci.NewMemoryRegistry()
@@ -27,14 +30,12 @@ func TestInstallSingleRootWritesActiveDirectoryAndState(t *testing.T) {
 	targetDir := t.TempDir()
 	now := time.Date(2026, 3, 26, 12, 0, 0, 0, time.UTC)
 
-	state, err := Install(context.Background(), Options{
-		Registry:  registry,
+	state, err := Install(context.Background(), Options{Registry: registry,
 		Reference: ref,
 		TargetDir: targetDir,
 		Now: func() time.Time {
 			return now
-		},
-	})
+		}, TrustPolicy: noVerifyPolicy})
 	if err != nil {
 		t.Fatalf("Install() error = %v", err)
 	}
@@ -76,11 +77,9 @@ func TestInstallRejectsConfigManifestMismatch(t *testing.T) {
 		t.Fatalf("Push() error = %v", err)
 	}
 
-	_, err = Install(context.Background(), Options{
-		Registry:  registry,
+	_, err = Install(context.Background(), Options{Registry: registry,
 		Reference: ref.Canonical(),
-		TargetDir: t.TempDir(),
-	})
+		TargetDir: t.TempDir(), TrustPolicy: noVerifyPolicy})
 	if err == nil {
 		t.Fatal("Install() error = nil, want mismatch failure")
 	}
@@ -101,7 +100,7 @@ func TestPrepareFetchedArtifactRejectsMalformedReference(t *testing.T) {
 		Archive:   buildPackageBytes(t, fixtureSkillDir(t)),
 	}
 
-	_, err = prepareFetchedArtifact(fetched, t.TempDir())
+	_, err = prepareFetchedArtifact(context.Background(), fetched, t.TempDir(), noVerifyPolicy)
 	if err == nil {
 		t.Fatal("prepareFetchedArtifact() error = nil, want malformed reference failure")
 	}
@@ -116,28 +115,24 @@ func TestInstallUpgradeReplacesActiveDirectoryAndAppendsHistory(t *testing.T) {
 
 	firstRef := pushSkill(t, registry, fixtureSkillDir(t), "registry.example.com/agentskills/list-directory")
 	firstNow := time.Date(2026, 3, 26, 12, 0, 0, 0, time.UTC)
-	if _, err := Install(context.Background(), Options{
-		Registry:  registry,
+	if _, err := Install(context.Background(), Options{Registry: registry,
 		Reference: firstRef,
 		TargetDir: targetDir,
 		Now: func() time.Time {
 			return firstNow
-		},
-	}); err != nil {
+		}, TrustPolicy: noVerifyPolicy}); err != nil {
 		t.Fatalf("first Install() error = %v", err)
 	}
 
 	secondDir := mutatedSkillDir(t, "2.0.0", "# list-directory\n\nversion two\n")
 	secondRef := pushSkill(t, registry, secondDir, "registry.example.com/agentskills/list-directory")
 	secondNow := time.Date(2026, 3, 26, 13, 0, 0, 0, time.UTC)
-	state, err := Install(context.Background(), Options{
-		Registry:  registry,
+	state, err := Install(context.Background(), Options{Registry: registry,
 		Reference: secondRef,
 		TargetDir: targetDir,
 		Now: func() time.Time {
 			return secondNow
-		},
-	})
+		}, TrustPolicy: noVerifyPolicy})
 	if err != nil {
 		t.Fatalf("second Install() error = %v", err)
 	}
@@ -232,11 +227,9 @@ func TestInstallRejectsMalformedExistingInstallState(t *testing.T) {
 		t.Fatalf("WriteFile(bad state) error = %v", err)
 	}
 
-	_, err := Install(context.Background(), Options{
-		Registry:  registry,
+	_, err := Install(context.Background(), Options{Registry: registry,
 		Reference: ref,
-		TargetDir: targetDir,
-	})
+		TargetDir: targetDir, TrustPolicy: noVerifyPolicy})
 	if err == nil {
 		t.Fatal("Install() error = nil, want malformed existing state failure")
 	}
@@ -618,23 +611,19 @@ func TestInstallRollsBackActivationWhenStateWriteFails(t *testing.T) {
 	targetDir := t.TempDir()
 
 	firstRef := pushSkill(t, registry, fixtureSkillDir(t), "registry.example.com/agentskills/list-directory")
-	if _, err := Install(context.Background(), Options{
-		Registry:  registry,
+	if _, err := Install(context.Background(), Options{Registry: registry,
 		Reference: firstRef,
-		TargetDir: targetDir,
-	}); err != nil {
+		TargetDir: targetDir, TrustPolicy: noVerifyPolicy}); err != nil {
 		t.Fatalf("first Install() error = %v", err)
 	}
 
 	secondDir := mutatedSkillDir(t, "2.0.0", "# list-directory\n\nversion two\n")
 	secondRef := pushSkill(t, registry, secondDir, "registry.example.com/agentskills/list-directory")
 
-	_, err := Install(context.Background(), Options{
-		Registry:    registry,
+	_, err := Install(context.Background(), Options{Registry: registry,
 		Reference:   secondRef,
 		TargetDir:   targetDir,
-		StateWriter: func(string, State) error { return errors.New("boom") },
-	})
+		StateWriter: func(string, State) error { return errors.New("boom") }, TrustPolicy: noVerifyPolicy})
 	if err == nil {
 		t.Fatal("Install() error = nil, want state write failure")
 	}
@@ -656,11 +645,9 @@ func TestInstallFailsWhenBackupCleanupFails(t *testing.T) {
 	targetDir := t.TempDir()
 
 	firstRef := pushSkill(t, registry, fixtureSkillDir(t), "registry.example.com/agentskills/list-directory")
-	if _, err := Install(context.Background(), Options{
-		Registry:  registry,
+	if _, err := Install(context.Background(), Options{Registry: registry,
 		Reference: firstRef,
-		TargetDir: targetDir,
-	}); err != nil {
+		TargetDir: targetDir, TrustPolicy: noVerifyPolicy}); err != nil {
 		t.Fatalf("first Install() error = %v", err)
 	}
 
@@ -675,11 +662,9 @@ func TestInstallFailsWhenBackupCleanupFails(t *testing.T) {
 		commitActivations = previousCommit
 	}()
 
-	_, err := Install(context.Background(), Options{
-		Registry:  registry,
+	_, err := Install(context.Background(), Options{Registry: registry,
 		Reference: secondRef,
-		TargetDir: targetDir,
-	})
+		TargetDir: targetDir, TrustPolicy: noVerifyPolicy})
 	if err == nil {
 		t.Fatal("Install() error = nil, want cleanup failure")
 	}
@@ -710,11 +695,9 @@ func TestInstallGraph(t *testing.T) {
 		targetDir := t.TempDir()
 
 		unrelatedRef := pushSkill(t, registry, namedSkillDir(t, "notes", "0.1.0", "# notes\n", nil), "registry.example.com/agentskills/notes")
-		if _, err := Install(context.Background(), Options{
-			Registry:  registry,
+		if _, err := Install(context.Background(), Options{Registry: registry,
 			Reference: unrelatedRef,
-			TargetDir: targetDir,
-		}); err != nil {
+			TargetDir: targetDir, TrustPolicy: noVerifyPolicy}); err != nil {
 			t.Fatalf("Install(unrelated) error = %v", err)
 		}
 
@@ -722,11 +705,9 @@ func TestInstallGraph(t *testing.T) {
 		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
 		graph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
 
-		state, err := Install(context.Background(), Options{
-			Registry:  registry,
+		state, err := Install(context.Background(), Options{Registry: registry,
 			Graph:     &graph,
-			TargetDir: targetDir,
-		})
+			TargetDir: targetDir, TrustPolicy: noVerifyPolicy})
 		if err != nil {
 			t.Fatalf("Install(graph) error = %v", err)
 		}
@@ -761,11 +742,9 @@ func TestInstallGraph(t *testing.T) {
 		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
 		graph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
 
-		state, err := Install(context.Background(), Options{
-			Registry:  registry,
+		state, err := Install(context.Background(), Options{Registry: registry,
 			Graph:     &graph,
-			TargetDir: targetDir,
-		})
+			TargetDir: targetDir, TrustPolicy: noVerifyPolicy})
 		if err != nil {
 			t.Fatalf("Install(graph) error = %v", err)
 		}
@@ -787,14 +766,14 @@ func TestInstallGraph(t *testing.T) {
 		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
 		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
 		firstGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
-		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir}); err != nil {
+		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir, TrustPolicy: noVerifyPolicy}); err != nil {
 			t.Fatalf("Install(first graph) error = %v", err)
 		}
 
 		pushResolvedSkill(t, registry, "child", "2.0.0", nil)
 		pushResolvedSkill(t, registry, "root", "2.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^2.0.0"}})
 		secondGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
-		state, err := Install(context.Background(), Options{Registry: registry, Graph: &secondGraph, TargetDir: targetDir})
+		state, err := Install(context.Background(), Options{Registry: registry, Graph: &secondGraph, TargetDir: targetDir, TrustPolicy: noVerifyPolicy})
 		if err != nil {
 			t.Fatalf("Install(second graph) error = %v", err)
 		}
@@ -847,7 +826,7 @@ func TestInstallGraph(t *testing.T) {
 			Edges: map[string][]string{"root": []string{"child"}},
 		}
 
-		_, err = Install(context.Background(), Options{Registry: registry, Graph: &graph, TargetDir: targetDir})
+		_, err = Install(context.Background(), Options{Registry: registry, Graph: &graph, TargetDir: targetDir, TrustPolicy: noVerifyPolicy})
 		if err == nil || !strings.Contains(err.Error(), "does not match mirrored manifest") {
 			t.Fatalf("Install(graph) error = %v, want config mismatch failure", err)
 		}
@@ -864,7 +843,7 @@ func TestRestoreOnStateWriteFailure(t *testing.T) {
 	pushResolvedSkill(t, registry, "child", "1.0.0", nil)
 	pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
 	firstGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
-	if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir}); err != nil {
+	if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir, TrustPolicy: noVerifyPolicy}); err != nil {
 		t.Fatalf("Install(first graph) error = %v", err)
 	}
 	beforeState, err := LoadState(targetDir)
@@ -876,12 +855,10 @@ func TestRestoreOnStateWriteFailure(t *testing.T) {
 	pushResolvedSkill(t, registry, "root", "2.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^2.0.0"}})
 	secondGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
 
-	_, err = Install(context.Background(), Options{
-		Registry:    registry,
+	_, err = Install(context.Background(), Options{Registry: registry,
 		Graph:       &secondGraph,
 		TargetDir:   targetDir,
-		StateWriter: func(string, State) error { return errors.New("boom") },
-	})
+		StateWriter: func(string, State) error { return errors.New("boom") }, TrustPolicy: noVerifyPolicy})
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("Install(graph) error = %v, want state write failure", err)
 	}
@@ -904,11 +881,9 @@ func TestInstallFromLockfile(t *testing.T) {
 		targetDir := t.TempDir()
 
 		unrelatedRef := pushSkill(t, registry, namedSkillDir(t, "notes", "0.1.0", "# notes\n", nil), "registry.example.com/agentskills/notes")
-		if _, err := Install(context.Background(), Options{
-			Registry:  registry,
+		if _, err := Install(context.Background(), Options{Registry: registry,
 			Reference: unrelatedRef,
-			TargetDir: targetDir,
-		}); err != nil {
+			TargetDir: targetDir, TrustPolicy: noVerifyPolicy}); err != nil {
 			t.Fatalf("Install(unrelated) error = %v", err)
 		}
 
@@ -924,11 +899,9 @@ func TestInstallFromLockfile(t *testing.T) {
 			t.Fatalf("ToGraph() error = %v", err)
 		}
 
-		state, err := Install(context.Background(), Options{
-			Registry:  registry,
+		state, err := Install(context.Background(), Options{Registry: registry,
 			Graph:     &graph,
-			TargetDir: targetDir,
-		})
+			TargetDir: targetDir, TrustPolicy: noVerifyPolicy})
 		if err != nil {
 			t.Fatalf("Install(lockfile graph) error = %v", err)
 		}
@@ -970,11 +943,9 @@ func TestInstallFromLockfile(t *testing.T) {
 			t.Fatalf("ToGraph() error = %v", err)
 		}
 
-		state, err := Install(context.Background(), Options{
-			Registry:  registry,
+		state, err := Install(context.Background(), Options{Registry: registry,
 			Graph:     &graph,
-			TargetDir: targetDir,
-		})
+			TargetDir: targetDir, TrustPolicy: noVerifyPolicy})
 		if err != nil {
 			t.Fatalf("Install(lockfile graph) error = %v", err)
 		}
@@ -1010,7 +981,7 @@ func TestInstallFromLockfile(t *testing.T) {
 			t.Fatalf("ToGraph() error = %v", err)
 		}
 
-		_, err = Install(context.Background(), Options{Registry: registry, Graph: &graph, TargetDir: targetDir})
+		_, err = Install(context.Background(), Options{Registry: registry, Graph: &graph, TargetDir: targetDir, TrustPolicy: noVerifyPolicy})
 		if err == nil {
 			t.Fatal("Install(lockfile graph) error = nil, want version mismatch failure")
 		}
@@ -1038,7 +1009,7 @@ func TestInstallFromLockfile(t *testing.T) {
 		selected.Digest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 		graph.Packages["child"] = selected
 
-		_, err = Install(context.Background(), Options{Registry: registry, Graph: &graph, TargetDir: targetDir})
+		_, err = Install(context.Background(), Options{Registry: registry, Graph: &graph, TargetDir: targetDir, TrustPolicy: noVerifyPolicy})
 		if err == nil {
 			t.Fatal("Install(lockfile graph) error = nil, want digest mismatch failure")
 		}
@@ -1057,14 +1028,12 @@ func TestRollback(t *testing.T) {
 		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
 		firstGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
 		firstTime := time.Date(2026, 3, 30, 15, 0, 0, 0, time.UTC)
-		if _, err := Install(context.Background(), Options{
-			Registry:  registry,
+		if _, err := Install(context.Background(), Options{Registry: registry,
 			Graph:     &firstGraph,
 			TargetDir: targetDir,
 			Now: func() time.Time {
 				return firstTime
-			},
-		}); err != nil {
+			}, TrustPolicy: noVerifyPolicy}); err != nil {
 			t.Fatalf("Install(first graph) error = %v", err)
 		}
 
@@ -1072,14 +1041,12 @@ func TestRollback(t *testing.T) {
 		pushResolvedSkill(t, registry, "root", "2.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^2.0.0"}})
 		secondGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
 		secondTime := time.Date(2026, 3, 30, 16, 0, 0, 0, time.UTC)
-		if _, err := Install(context.Background(), Options{
-			Registry:  registry,
+		if _, err := Install(context.Background(), Options{Registry: registry,
 			Graph:     &secondGraph,
 			TargetDir: targetDir,
 			Now: func() time.Time {
 				return secondTime
-			},
-		}); err != nil {
+			}, TrustPolicy: noVerifyPolicy}); err != nil {
 			t.Fatalf("Install(second graph) error = %v", err)
 		}
 
@@ -1122,14 +1089,14 @@ func TestRollback(t *testing.T) {
 		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
 		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
 		firstGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
-		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir}); err != nil {
+		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir, TrustPolicy: noVerifyPolicy}); err != nil {
 			t.Fatalf("Install(first graph) error = %v", err)
 		}
 
 		pushResolvedSkill(t, registry, "child", "2.0.0", nil)
 		pushResolvedSkill(t, registry, "root", "2.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^2.0.0"}})
 		secondGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
-		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &secondGraph, TargetDir: targetDir}); err != nil {
+		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &secondGraph, TargetDir: targetDir, TrustPolicy: noVerifyPolicy}); err != nil {
 			t.Fatalf("Install(second graph) error = %v", err)
 		}
 
@@ -1160,11 +1127,9 @@ func TestRollback(t *testing.T) {
 		targetDir := t.TempDir()
 
 		ref := pushSkill(t, registry, fixtureSkillDir(t), "registry.example.com/agentskills/list-directory")
-		if _, err := Install(context.Background(), Options{
-			Registry:  registry,
+		if _, err := Install(context.Background(), Options{Registry: registry,
 			Reference: ref,
-			TargetDir: targetDir,
-		}); err != nil {
+			TargetDir: targetDir, TrustPolicy: noVerifyPolicy}); err != nil {
 			t.Fatalf("Install() error = %v", err)
 		}
 
@@ -1280,14 +1245,14 @@ func TestRollback(t *testing.T) {
 		pushResolvedSkill(t, registry, "child", "1.0.0", nil)
 		pushResolvedSkill(t, registry, "root", "1.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^1.0.0"}})
 		firstGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
-		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir}); err != nil {
+		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &firstGraph, TargetDir: targetDir, TrustPolicy: noVerifyPolicy}); err != nil {
 			t.Fatalf("Install(first graph) error = %v", err)
 		}
 
 		pushResolvedSkill(t, registry, "child", "2.0.0", nil)
 		pushResolvedSkill(t, registry, "root", "2.0.0", []manifestpkg.Dependency{{Name: "child", Version: "^2.0.0"}})
 		secondGraph := resolveGraphForInstall(t, registry, "root", "registry.example.com/agentskills")
-		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &secondGraph, TargetDir: targetDir}); err != nil {
+		if _, err := Install(context.Background(), Options{Registry: registry, Graph: &secondGraph, TargetDir: targetDir, TrustPolicy: noVerifyPolicy}); err != nil {
 			t.Fatalf("Install(second graph) error = %v", err)
 		}
 

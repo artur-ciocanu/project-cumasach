@@ -15,7 +15,14 @@ func VerifyReference(ctx context.Context, registry oci.Registry, reference strin
 	if err != nil {
 		return Result{}, err
 	}
+	return VerifyFetchedArtifact(ctx, fetched, policy)
+}
 
+// VerifyFetchedArtifact validates an already-fetched OCI artifact: structural
+// checks (config blob equals the mirrored manifest, package archive layout)
+// run first, then published-artifact trust. Callers that have already fetched
+// the bytes use this to avoid a redundant registry round-trip.
+func VerifyFetchedArtifact(ctx context.Context, fetched oci.FetchedArtifact, policy TrustPolicy) (Result, error) {
 	mirroredManifestBytes, _, err := archivepkg.ReadMirroredManifestTGZ(bytes.NewReader(fetched.Archive))
 	if err != nil {
 		return Result{}, fmt.Errorf("read mirrored manifest from fetched archive: %w", err)

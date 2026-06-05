@@ -103,7 +103,18 @@ func TestVerifyCommand(t *testing.T) {
 		restore := swapVerifyRegistry(t, registry)
 		defer restore()
 
-		refValue, err := oci.Push(context.Background(), registry, "registry.example.com/agentskills/list-directory", []byte(`{"schemaVersion":"v1","packageType":"skill","name":"list-directory","version":"1.2.3","skill":{"entrypoint":"SKILL.md"}}`), []byte("archive"), oci.PushOptions{Tag: "1.2.3"})
+		// Push a structurally valid artifact so the missing verifier-input
+		// requirement — not a structural failure — is what surfaces.
+		archivePath := buildNamedPackage(t, "list-directory", "1.2.3", nil)
+		archiveBytes, err := os.ReadFile(archivePath)
+		if err != nil {
+			t.Fatalf("ReadFile(archivePath) error = %v", err)
+		}
+		mirroredManifestBytes, mirroredManifest, err := archivepkg.ReadMirroredManifestTGZ(bytes.NewReader(archiveBytes))
+		if err != nil {
+			t.Fatalf("ReadMirroredManifestTGZ() error = %v", err)
+		}
+		refValue, err := oci.Push(context.Background(), registry, "registry.example.com/agentskills/list-directory", mirroredManifestBytes, archiveBytes, oci.PushOptions{Tag: mirroredManifest.Version})
 		if err != nil {
 			t.Fatalf("oci.Push() error = %v", err)
 		}
