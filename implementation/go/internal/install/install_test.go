@@ -1493,3 +1493,55 @@ func activeSkillVersion(t *testing.T, active []ResolvedSkill, name string) strin
 	t.Fatalf("active skill %q not found in %#v", name, active)
 	return ""
 }
+
+// TestActivateRejectsSymlinkInRuntimeTarget pins conformance §3.4 / spec §12.3:
+// a link-like entry in the runtime-visible target MUST NOT be exposed as an
+// active skill directory. The installer fails closed when such an entry exists,
+// so a colliding symlink is never adopted as the active entry of a successful
+// activation.
+func TestActivateRejectsSymlinkInRuntimeTarget(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on windows")
+	}
+
+	targetDir := t.TempDir()
+	active := filepath.Join(targetDir, "list-directory")
+
+	// Pre-existing symlink whose name collides with the skill about to activate.
+	linkTarget := t.TempDir()
+	if err := os.Symlink(linkTarget, active); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+
+	extractedRoot := filepath.Join(t.TempDir(), "extracted")
+	if err := os.MkdirAll(extractedRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll(extractedRoot) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(extractedRoot, "SKILL.md"), []byte("# list-directory\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(SKILL.md) error = %v", err)
+	}
+
+	_, err := Activate(extractedRoot, targetDir, "list-directory")
+
+	info, lerr := os.Lstat(active)
+	if err == nil {
+		// If activation succeeded it MUST have replaced the link with a real dir.
+		if lerr != nil {
+			t.Fatalf("Lstat(active) error = %v", lerr)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			t.Fatalf("active entry %q is a symlink, want real directory", active)
+		}
+		if !info.IsDir() {
+			t.Fatalf("active entry %q is not a directory", active)
+		}
+		return
+	}
+
+	// Otherwise activation failed closed: it MUST NOT have produced state that
+	// exposes the link as an active skill. The pre-existing link may remain
+	// untouched, but no successful activation adopted it.
+	if _, stateErr := LoadState(targetDir); stateErr == nil {
+		t.Fatalf("activation failed but install state was written, exposing a link-like active entry")
+	}
+}
