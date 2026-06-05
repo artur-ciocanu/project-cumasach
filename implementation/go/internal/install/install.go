@@ -117,7 +117,7 @@ func Rollback(ctx context.Context, options Options) (State, error) {
 		return State{}, err
 	}
 
-	prepared, resolved, err := prepareGraphInstall(ctx, options.Registry, options.TargetDir, graph, verifypkg.TrustPolicy{NoVerify: true})
+	prepared, _, err := prepareGraphInstall(ctx, options.Registry, options.TargetDir, graph, verifypkg.TrustPolicy{NoVerify: true})
 	if err != nil {
 		return State{}, err
 	}
@@ -144,8 +144,6 @@ func Rollback(ctx context.Context, options Options) (State, error) {
 	if err := commitActivations(activations); err != nil {
 		return State{}, fmt.Errorf("rollback succeeded but cleanup failed: %w", err)
 	}
-
-	_ = resolved
 	return state, nil
 }
 
