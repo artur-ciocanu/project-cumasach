@@ -131,6 +131,30 @@ func TestFetchRejectsManifestWithWrongLayerMediaType(t *testing.T) {
 	}
 }
 
+func TestFetchRejectsManifestWithWrongConfigMediaType(t *testing.T) {
+	t.Parallel()
+
+	registry := newStaticRegistry(t, manifestDescriptor(t, ocispec.Manifest{
+		Config: ocispec.Descriptor{MediaType: "application/octet-stream"},
+		Layers: []ocispec.Descriptor{
+			{MediaType: ContentLayerMediaType},
+		},
+	}), mustJSON(t, ocispec.Manifest{
+		Config: ocispec.Descriptor{MediaType: "application/octet-stream"},
+		Layers: []ocispec.Descriptor{
+			{MediaType: ContentLayerMediaType},
+		},
+	}))
+
+	_, err := Fetch(context.Background(), registry, "oci://registry.example.com/agentskills/list-directory@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+	if err == nil {
+		t.Fatal("Fetch() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "config media type") {
+		t.Fatalf("Fetch() error = %q, want wrong config media type failure", err)
+	}
+}
+
 func TestRepositoryParentFromExactReference(t *testing.T) {
 	t.Parallel()
 

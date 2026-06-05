@@ -400,7 +400,7 @@ Within a lockfile:
 
 When a valid lockfile is present, consumers MUST prefer the lockfile over live dependency solving.
 
-The `root.reference` field MAY identify the originally requested root artifact reference, but in v1 it MUST still use the same digest-pinned artifact reference format as resolved package entries.
+The `root.reference` field MUST be the resolved, digest-pinned artifact reference of the root package — identical to the `reference` of the package entry identified by `root.name` (§10.2). It records the resolved identity of the originally requested root, not any tag-based or otherwise unresolved form of the original request; a v1 lockfile does not preserve a pre-resolution tag reference.
 
 JSON Schema validation alone does not fully validate artifact-reference correctness in v1. Consumers MUST perform semantic validation that each `reference` is a valid OCI artifact locator in the form defined by this specification.
 
@@ -502,6 +502,8 @@ If `history` is non-empty and the newest `history` entry does not match the top-
 On rollback, the consumer MUST re-materialize the history snapshot immediately preceding the newest history entry in the ordered install-state history.
 
 If no earlier history snapshot exists, rollback MUST fail.
+
+Rollback MUST append a new history entry recording the restored snapshot as the post-action active set; it MUST NOT remove or rewrite earlier history entries (per §11.4). As a consequence, repeated rollback oscillates between the two newest snapshots rather than walking history backward through successive levels: a second consecutive rollback re-materializes the snapshot that the first rollback replaced. Multi-level undo across more than the two newest snapshots is NOT required in v1; consumers MAY offer it as an extension provided they continue to append, and never reorder, history entries.
 
 ## 14. Policy
 

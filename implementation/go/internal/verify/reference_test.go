@@ -102,6 +102,48 @@ func TestVerifyReference(t *testing.T) {
 	})
 }
 
+type recordingCosignRunner struct {
+	verifyCalled *bool
+}
+
+func (r recordingCosignRunner) Run(_ context.Context, name string, args ...string) (CommandResult, error) {
+	if name == "cosign" && len(args) > 0 && args[0] == "verify" {
+		*r.verifyCalled = true
+	}
+	return CommandResult{Stdout: []byte("{}\n")}, nil
+}
+
+func TestVerifyReferenceValidatesStructureBeforeTrust(t *testing.T) {
+	ctx := context.Background()
+	registry := oci.NewMemoryRegistry()
+	sourceDir := copySkillFixture(t, "list-directory")
+	archivePath := buildPackageArchive(t, sourceDir, true)
+	archiveBytes := mustReadFile(t, archivePath)
+	// Config blob deliberately diverges from the mirrored manifest: a structural
+	// failure that MUST surface before cosign trust verification is invoked.
+	configBytes := []byte(`{"schemaVersion":"v1","packageType":"skill","name":"list-directory","version":"9.9.9","skill":{"entrypoint":"SKILL.md"}}`)
+
+	ref, err := oci.Push(ctx, registry, "registry.example.com/agentskills/list-directory", configBytes, archiveBytes, oci.PushOptions{})
+	if err != nil {
+		t.Fatalf("Push() error = %v", err)
+	}
+
+	verifyCalled := false
+	restore := SetCommandRunnerForTesting(recordingCosignRunner{verifyCalled: &verifyCalled})
+	defer restore()
+
+	_, err = VerifyReference(ctx, registry, ref.Canonical(), validTrustPolicy())
+	if err == nil {
+		t.Fatal("VerifyReference() error = nil, want structural failure")
+	}
+	if !strings.Contains(err.Error(), "does not match mirrored manifest") {
+		t.Fatalf("VerifyReference() error = %q, want structural mismatch", err)
+	}
+	if verifyCalled {
+		t.Fatal("cosign verify was invoked before structural validation; want structure-before-trust ordering")
+	}
+}
+
 type staticRegistry struct {
 	desc  ocispec.Descriptor
 	store *staticReadOnlyTarget

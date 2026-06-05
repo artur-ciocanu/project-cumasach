@@ -236,7 +236,7 @@ All `install` forms MUST:
 
 Version 1 does not define an implicit target directory.
 
-If `--no-verify` is not supplied and any OCI artifact must be verified, the CLI MUST require:
+Whenever verification is enabled — that is, `--no-verify` is not selected — and any OCI artifact must be verified, the CLI MUST require:
 
 - `--certificate-identity`
 - `--certificate-oidc-issuer`
@@ -355,6 +355,8 @@ cumasach rollback --target <skills-dir>
 - append a new rollback history entry after successful restoration
 
 If required artifacts are missing from any local cache, the implementation MAY re-fetch them using the canonical artifact references recorded in install state.
+
+Because each `rollback` appends (and never reorders) a history entry, repeated `rollback` invocations oscillate between the two newest snapshots rather than walking history backward through successive levels: a second consecutive `rollback` returns the active view to the snapshot the first `rollback` replaced. This matches packaging §13.3; multi-level undo is not required in v1.
 
 ### 11.4 Failure conditions
 

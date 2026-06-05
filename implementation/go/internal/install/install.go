@@ -12,6 +12,7 @@ import (
 	archivepkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/archive"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/oci"
 	"github.com/artur-ciocanu/project-cumasach/implementation/go/internal/resolve"
+	verifypkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/verify"
 )
 
 type Options struct {
@@ -19,6 +20,7 @@ type Options struct {
 	Reference   string
 	Graph       *resolve.Graph
 	TargetDir   string
+	TrustPolicy verifypkg.TrustPolicy
 	Now         func() time.Time
 	StateWriter func(string, State) error
 }
@@ -36,6 +38,9 @@ func Install(ctx context.Context, options Options) (State, error) {
 	}
 	if options.TargetDir == "" {
 		return State{}, fmt.Errorf("target directory is required")
+	}
+	if err := options.TrustPolicy.ValidateForOCI(); err != nil {
+		return State{}, err
 	}
 
 	now := options.Now
@@ -112,7 +117,7 @@ func Rollback(ctx context.Context, options Options) (State, error) {
 		return State{}, err
 	}
 
-	prepared, resolved, err := prepareGraphInstall(ctx, options.Registry, options.TargetDir, graph)
+	prepared, _, err := prepareGraphInstall(ctx, options.Registry, options.TargetDir, graph, verifypkg.TrustPolicy{NoVerify: true})
 	if err != nil {
 		return State{}, err
 	}
@@ -139,14 +144,12 @@ func Rollback(ctx context.Context, options Options) (State, error) {
 	if err := commitActivations(activations); err != nil {
 		return State{}, fmt.Errorf("rollback succeeded but cleanup failed: %w", err)
 	}
-
-	_ = resolved
 	return state, nil
 }
 
 func prepareInstall(ctx context.Context, options Options) ([]PreparedSkill, []ResolvedSkill, error) {
 	if options.Graph != nil {
-		return prepareGraphInstall(ctx, options.Registry, options.TargetDir, *options.Graph)
+		return prepareGraphInstall(ctx, options.Registry, options.TargetDir, *options.Graph, options.TrustPolicy)
 	}
 
 	fetched, err := oci.Fetch(ctx, options.Registry, options.Reference)
@@ -154,7 +157,7 @@ func prepareInstall(ctx context.Context, options Options) ([]PreparedSkill, []Re
 		return nil, nil, err
 	}
 
-	prepared, err := prepareFetchedArtifact(fetched, options.TargetDir)
+	prepared, err := prepareFetchedArtifact(ctx, fetched, options.TargetDir, options.TrustPolicy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -166,7 +169,7 @@ type preparedArtifact struct {
 	Resolved ResolvedSkill
 }
 
-func prepareGraphInstall(ctx context.Context, registry oci.Registry, targetDir string, graph resolve.Graph) ([]PreparedSkill, []ResolvedSkill, error) {
+func prepareGraphInstall(ctx context.Context, registry oci.Registry, targetDir string, graph resolve.Graph, policy verifypkg.TrustPolicy) ([]PreparedSkill, []ResolvedSkill, error) {
 	names := make([]string, 0, len(graph.Packages))
 	for name := range graph.Packages {
 		names = append(names, name)
@@ -182,7 +185,7 @@ func prepareGraphInstall(ctx context.Context, registry oci.Registry, targetDir s
 			return nil, nil, err
 		}
 
-		artifact, err := prepareFetchedArtifactForSelected(fetched, targetDir, selected)
+		artifact, err := prepareFetchedArtifactForSelected(ctx, fetched, targetDir, selected, policy)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -192,18 +195,19 @@ func prepareGraphInstall(ctx context.Context, registry oci.Registry, targetDir s
 	return prepared, resolved, nil
 }
 
-func prepareFetchedArtifact(fetched oci.FetchedArtifact, targetDir string) (preparedArtifact, error) {
+func prepareFetchedArtifact(ctx context.Context, fetched oci.FetchedArtifact, targetDir string, policy verifypkg.TrustPolicy) (preparedArtifact, error) {
+	if _, err := verifypkg.VerifyFetchedArtifact(ctx, fetched, policy); err != nil {
+		return preparedArtifact{}, err
+	}
+
 	parsedRef, err := oci.ParseReference(fetched.Reference)
 	if err != nil {
 		return preparedArtifact{}, fmt.Errorf("parse fetched artifact reference: %w", err)
 	}
 
-	mirroredManifestBytes, mirroredManifest, err := archivepkg.ReadMirroredManifestTGZ(bytes.NewReader(fetched.Archive))
+	_, mirroredManifest, err := archivepkg.ReadMirroredManifestTGZ(bytes.NewReader(fetched.Archive))
 	if err != nil {
 		return preparedArtifact{}, fmt.Errorf("read mirrored manifest from fetched archive: %w", err)
-	}
-	if !bytes.Equal(fetched.Config, mirroredManifestBytes) {
-		return preparedArtifact{}, fmt.Errorf("OCI config blob does not match mirrored manifest")
 	}
 
 	extractedRoot, extractedManifest, err := archivepkg.ExtractTGZTemp(bytes.NewReader(fetched.Archive), filepath.Dir(targetDir))
@@ -228,8 +232,8 @@ func prepareFetchedArtifact(fetched oci.FetchedArtifact, targetDir string) (prep
 	}, nil
 }
 
-func prepareFetchedArtifactForSelected(fetched oci.FetchedArtifact, targetDir string, selected resolve.SelectedPackage) (preparedArtifact, error) {
-	artifact, err := prepareFetchedArtifact(fetched, targetDir)
+func prepareFetchedArtifactForSelected(ctx context.Context, fetched oci.FetchedArtifact, targetDir string, selected resolve.SelectedPackage, policy verifypkg.TrustPolicy) (preparedArtifact, error) {
+	artifact, err := prepareFetchedArtifact(ctx, fetched, targetDir, policy)
 	if err != nil {
 		return preparedArtifact{}, err
 	}

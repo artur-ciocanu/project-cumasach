@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 
 	installpkg "github.com/artur-ciocanu/project-cumasach/implementation/go/internal/install"
@@ -79,16 +78,13 @@ func newInstallCmd() *cobra.Command {
 					return err
 				}
 			}
-			if err := preverifyGraph(cmd.Context(), registry, graph, policy); err != nil {
-				return err
-			}
 
-			state, err := installpkg.Install(cmd.Context(), installpkg.Options{
-				Registry:  registry,
-				Graph:     &graph,
-				TargetDir: targetDir,
-			})
-			if err != nil {
+			if _, err := installpkg.Install(cmd.Context(), installpkg.Options{
+				Registry:    registry,
+				Graph:       &graph,
+				TargetDir:   targetDir,
+				TrustPolicy: policy,
+			}); err != nil {
 				return err
 			}
 			installed, ok := graph.Packages[graph.Root]
@@ -96,7 +92,6 @@ func newInstallCmd() *cobra.Command {
 				return fmt.Errorf("install completed without an active skill")
 			}
 
-			_ = state
 			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "installed %s %s\n", installed.Name, installed.Version); err != nil {
 				return fmt.Errorf("write install result: %w", err)
 			}
@@ -114,22 +109,6 @@ func newInstallCmd() *cobra.Command {
 	cmd.Flags().StringVar(&sourceRepository, "source-repo", "", "Expected source repository URI recorded in provenance")
 
 	return cmd
-}
-
-func preverifyGraph(ctx context.Context, registry oci.Registry, graph resolve.Graph, policy verifypkg.TrustPolicy) error {
-	if policy.NoVerify {
-		return nil
-	}
-	if err := policy.ValidateForOCI(); err != nil {
-		return err
-	}
-
-	for _, selected := range graph.Packages {
-		if _, err := verifypkg.VerifyReference(ctx, registry, selected.Reference, policy); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func parseInstallRoot(value, from string) (resolve.Root, error) {
