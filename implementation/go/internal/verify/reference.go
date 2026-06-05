@@ -11,10 +11,6 @@ import (
 )
 
 func VerifyReference(ctx context.Context, registry oci.Registry, reference string, policy TrustPolicy) (Result, error) {
-	if err := VerifyPublishedArtifactTrust(ctx, reference, policy); err != nil {
-		return Result{}, err
-	}
-
 	fetched, err := oci.Fetch(ctx, registry, reference)
 	if err != nil {
 		return Result{}, err
@@ -32,6 +28,11 @@ func VerifyReference(ctx context.Context, registry oci.Registry, reference strin
 	if err != nil {
 		return Result{}, err
 	}
+
+	if err := VerifyPublishedArtifactTrust(ctx, fetched.Reference, policy); err != nil {
+		return Result{}, err
+	}
+
 	result.Mode = "oci"
 	result.Reference = fetched.Reference
 	return result, nil
