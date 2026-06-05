@@ -236,7 +236,7 @@ All `install` forms MUST:
 
 Version 1 does not define an implicit target directory.
 
-If `--no-verify` is not supplied and any OCI artifact must be verified, the CLI MUST require:
+Whenever verification is enabled — that is, `--no-verify` is not selected — and any OCI artifact must be verified, the CLI MUST require:
 
 - `--certificate-identity`
 - `--certificate-oidc-issuer`
