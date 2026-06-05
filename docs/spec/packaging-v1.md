@@ -503,6 +503,8 @@ On rollback, the consumer MUST re-materialize the history snapshot immediately p
 
 If no earlier history snapshot exists, rollback MUST fail.
 
+Rollback MUST append a new history entry recording the restored snapshot as the post-action active set; it MUST NOT remove or rewrite earlier history entries (per §11.4). As a consequence, repeated rollback oscillates between the two newest snapshots rather than walking history backward through successive levels: a second consecutive rollback re-materializes the snapshot that the first rollback replaced. Multi-level undo across more than the two newest snapshots is NOT required in v1; consumers MAY offer it as an extension provided they continue to append, and never reorder, history entries.
+
 ## 14. Policy
 
 Version 1 leaves policy expression implementation-defined, but a compliant ecosystem SHOULD support policy controls for:

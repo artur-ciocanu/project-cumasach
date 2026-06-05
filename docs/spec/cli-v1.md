@@ -356,6 +356,8 @@ cumasach rollback --target <skills-dir>
 
 If required artifacts are missing from any local cache, the implementation MAY re-fetch them using the canonical artifact references recorded in install state.
 
+Because each `rollback` appends (and never reorders) a history entry, repeated `rollback` invocations oscillate between the two newest snapshots rather than walking history backward through successive levels: a second consecutive `rollback` returns the active view to the snapshot the first `rollback` replaced. This matches packaging §13.3; multi-level undo is not required in v1.
+
 ### 11.4 Failure conditions
 
 `rollback` MUST fail if:
