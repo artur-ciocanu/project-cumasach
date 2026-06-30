@@ -67,6 +67,12 @@ release:
 
 homebrew_casks:
   - name: cumasach
+    # repository.name is required for GoReleaser to render the cask, even with
+    # skip_upload. No token here: skip_upload means GoReleaser never pushes;
+    # the cask is published by the signed-commit step in release.yml.
+    repository:
+      owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
+      name: homebrew-tap
     homepage: "https://github.com/artur-ciocanu/project-cumasach"
     description: "OCI-native packaging for Agent Skills"
     directory: Casks
