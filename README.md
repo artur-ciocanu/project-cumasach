@@ -37,9 +37,21 @@ cumasach push ./dist/my-skill-1.0.0.tgz ghcr.io/my-org/skills/my-skill
 cumasach install oci://ghcr.io/my-org/skills/my-skill@sha256:... --target ./skills
 ```
 
-> Cumasach doesn't have prebuilt binaries yet. See [Building from source](#building-from-source) for how to run the CLI from the Go module.
-
 The result is a flat directory that any agent runtime reads as-is. Claude Code, Cursor, OpenClaw — they all expect a skills folder with `SKILL.md` files. Cumasach materializes exactly that. It sits in front of the runtime as the packaging and verification layer. It doesn't change how skills work. It changes how they ship.
+
+## Install
+
+**Homebrew:**
+
+```bash
+brew install artur-ciocanu/tap/cumasach
+```
+
+**Pre-built binaries:** download the archive for your platform from the
+[releases page](https://github.com/artur-ciocanu/project-cumasach/releases),
+verify it against `checksums.txt`, and place `cumasach` on your `PATH`.
+
+**From source:** see [Building from source](#building-from-source).
 
 ## Dependency resolution
 
