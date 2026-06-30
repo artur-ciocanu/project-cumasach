@@ -64,3 +64,21 @@ release:
     name: project-cumasach
   draft: false
   prerelease: auto
+
+homebrew_casks:
+  - name: cumasach
+    homepage: "https://github.com/artur-ciocanu/project-cumasach"
+    description: "OCI-native packaging for Agent Skills"
+    directory: Casks
+    # Generate the cask into dist/ only. Publishing is handled by a separate
+    # signed-commit step in release.yml, because the tap requires signed
+    # commits and GoReleaser's API push produces unsigned commits.
+    skip_upload: true
+    # Binaries are not notarized; strip the Gatekeeper quarantine attribute
+    # on install so macOS will run them.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/cumasach"]
+          end
