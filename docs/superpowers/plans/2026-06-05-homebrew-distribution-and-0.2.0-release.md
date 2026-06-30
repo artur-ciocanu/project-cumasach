@@ -4,9 +4,9 @@
 
 **Goal:** Ship `cumasach` via Homebrew and publish version `0.2.0`. Two deliverables: (1) the release pipeline generates a Homebrew Cask and publishes it to a tap repo **as a signed (Verified) commit**, and (2) tag `v0.2.0` produces a GitHub release whose changelog headlines the new sigstore signature + SLSA provenance verification work.
 
-**Architecture:** The Go reference implementation lives in `implementation/go`. Releases are **tag-driven**: `.github/workflows/release.yml` triggers on `v*` tags → runs GoReleaser (`implementation/go/.goreleaser.yml`) → a separate `provenance` job attaches SLSA attestations. Version is **not** hardcoded; it is injected via ldflags `-X main.version={{.Version}}` from the git tag (`cmd/cumasach/main.go` holds only the `dev` fallback). A version bump is therefore a new tag, not a source edit.
+**Architecture:** The Go reference implementation lives in `implementation/go`. Releases are **tag-driven**: `.github/workflows/release.yml` triggers on `v*` tags → runs GoReleaser (`implementation/go/.goreleaser.yml`), publishes the Homebrew cask via a signed commit, then attaches signed build provenance with `actions/attest-build-provenance`. Version is **not** hardcoded; it is injected via ldflags `-X main.version={{.Version}}` from the git tag (`cmd/cumasach/main.go` holds only the `dev` fallback). A version bump is therefore a new tag, not a source edit.
 
-**Tech Stack:** Go 1.25, GoReleaser pinned to `v2.15.2`, GitHub Actions, SLSA generic generator, `gh` CLI (preinstalled on `ubuntu-latest`). Module path `github.com/artur-ciocanu/project-cumasach/implementation/go`.
+**Tech Stack:** Go 1.25, GoReleaser pinned to `v2.15.2`, GitHub Actions, `actions/attest-build-provenance` (GitHub-native artifact attestations), `gh` CLI (preinstalled on `ubuntu-latest`). Module path `github.com/artur-ciocanu/project-cumasach/implementation/go`.
 
 **Build / test commands** (run from repo root unless noted):
 - Validate GoReleaser config: `cd implementation/go && goreleaser check`
@@ -50,7 +50,7 @@ The signed-commit step authenticates as `HOMEBREW_TAP_GITHUB_TOKEN` (a PAT with 
 ### Known gotcha — macOS Gatekeeper
 The release binaries are **not** codesigned or notarized. Without intervention a cask install is quarantined ("App is damaged and cannot be opened"). The cask strips the `com.apple.quarantine` xattr on install (Task 1.1). Full notarization is out of scope (Apple developer account + yearly fee).
 
-**Out of scope:** codesigning/notarization of macOS binaries; Linux/`apt`/`scoop` distribution; cosign-signing the GitHub-release archives (OCI artifacts are already verifiable via `cumasach verify`; release tarballs rely on SLSA provenance + checksums); SSH-based GoReleaser tap pushes.
+**Out of scope:** codesigning/notarization of macOS binaries; Linux/`apt`/`scoop` distribution; cosign-signing the GitHub-release archives (OCI artifacts are already verifiable via `cumasach verify`; release archives carry an `actions/attest-build-provenance` attestation plus checksums); SSH-based GoReleaser tap pushes.
 
 ---
 
@@ -233,7 +233,7 @@ Phases 1–3 are in-repo edits and land on `main` together. **Phase 4 must be co
 ## Final Verification
 
 - [ ] `goreleaser check` is clean and `release --snapshot --clean` produces `dist/**/cumasach.rb` with the quarantine hook and correct sha256/url.
-- [ ] After the tagged run: the GitHub **release** for `v0.2.0` shows the platform archives, `checksums.txt`, SLSA provenance, and a changelog listing `feat: require signature and SLSA provenance verification`.
+- [ ] After the tagged run: the GitHub **release** for `v0.2.0` shows the platform archives + `checksums.txt`, a build-provenance attestation is published (verifiable via `gh attestation verify <archive> --repo artur-ciocanu/project-cumasach`), and the changelog lists `feat: require signature and SLSA provenance verification`.
 - [ ] The `homebrew-tap` repo gained `Casks/cumasach.rb` pinned to the 0.2.0 darwin archive sha256, and the commit shows the **"Verified"** badge (signed-commits rule passed).
 - [ ] On macOS: `brew install artur-ciocanu/tap/cumasach && cumasach --version` prints `0.2.0 (<commit>, <date>)` and runs without a Gatekeeper block.
 - [ ] `README.md` no longer says "no prebuilt binaries yet" and documents the brew install.

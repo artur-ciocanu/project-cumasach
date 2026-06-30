@@ -15,12 +15,10 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      attestations: write
     defaults:
       run:
         working-directory: implementation/go
-    outputs:
-      artifacts: ${{ steps.goreleaser.outputs.artifacts }}
-      hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -78,28 +76,7 @@ jobs:
           jq -nc --arg q "$mutation" --argjson v "$variables" '{query:$q,variables:$v}' \
             | gh api graphql --input - --jq '.data.createCommitOnBranch.commit.url'
 
-      - name: Generate provenance subject hashes
-        id: hash
-        working-directory: implementation/go/dist
-        run: |
-          sha256sum cumasach_*.tar.gz cumasach_*.zip checksums.txt > hashes.txt
-          echo "hashes=$(base64 -w0 hashes.txt)" >> "$GITHUB_OUTPUT"
-
-      - name: Upload hashes
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
-          name: hashes
-          path: implementation/go/dist/hashes.txt
-          retention-days: 5
-
-  provenance:
-    name: SLSA Provenance
-    needs: goreleaser
-    permissions:
-      actions: read
-      id-token: write
-      contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
-    with:
-      base64-subjects: ${{ needs.goreleaser.outputs.hashes }}
-      upload-assets: true
+          subject-checksums: implementation/go/dist/checksums.txt
