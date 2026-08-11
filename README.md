@@ -1,3 +1,5 @@
+
+
 <h1 align="center">Cumasach</h1>
 
 <p align="center">
@@ -31,7 +33,11 @@ Cumasach brings the packaging infrastructure that every other software ecosystem
 cumasach package ./my-skill --files-sha256
 
 # Push to your registry
-cumasach push ./dist/my-skill-1.0.0.tgz ghcr.io/my-org/skills/my-skill
+cumasach push ./dist/my-skill-1.0.0.tgz ghcr.io/my-org/skills/my-skill \
+  --certificate-identity https://example.com/identity \
+  --certificate-oidc-issuer https://example.com/issuer \
+  --builder-id https://example.com/builder \
+  --source-repo https://github.com/example/repo
 
 # Install it anywhere
 cumasach install oci://ghcr.io/my-org/skills/my-skill@sha256:... --target ./skills
